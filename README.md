@@ -34,7 +34,9 @@ Download `zotero-arxiv-workflow.xpi` from the [release page](https://github.com/
 3. Select both items, right click
 4. Select "Merge arXiv"
 
-This will update the arXiv item with all the information from the journal item except for the `URL` and `dateAdded`. This will also make the published PDF as the default PDF.
+This will update the arXiv item with all the information from the journal item except for the `URL` and `dateAdded`. The journal item will be deleted and the original arXiv item will have type `journalArticle`.
+
+This will also make the published PDF as the default PDF.
 
 ### Prefer to open a specific PDF
 
