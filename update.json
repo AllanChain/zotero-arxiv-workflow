@@ -1,10 +1,10 @@
 {
   "addons": {
-    "addontemplate@euclpts.com": {
+    "arxiv@allanchain.github.com": {
       "updates": [
         {
-          "version": "1.1.2",
-          "update_link": "https://github.com/windingwind/zotero-addon-template/releases/latest/download/zotero-addon-template.xpi",
+          "version": "0.1.0",
+          "update_link": "https://github.com/AllanChain/zotero-arxiv-workflow/releases/latest/download/zotero-arxiv-workflow.xpi",
           "applications": {
             "zotero": {
               "strict_min_version": "6.999"

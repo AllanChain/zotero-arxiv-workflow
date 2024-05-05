@@ -1,15 +1,15 @@
 {
-  "name": "zotero-addon-template",
-  "version": "1.1.2",
-  "description": "Zotero Addon Template",
+  "name": "zotero-arxiv-workflow",
+  "version": "0.1.0",
+  "description": "arXiv Workflow for Zotero",
   "config": {
-    "addonName": "Zotero Addon Template",
-    "addonID": "addontemplate@euclpts.com",
-    "addonRef": "addontemplate",
-    "addonInstance": "AddonTemplate",
-    "prefsPrefix": "extensions.zotero.addontemplate",
-    "releasePage": "https://github.com/windingwind/zotero-addon-template/releases",
-    "updateJSON": "https://raw.githubusercontent.com/windingwind/zotero-addon-template/main/update.json"
+    "addonName": "arXiv Workflow for Zotero",
+    "addonID": "arxiv@allanchain.github.com",
+    "addonRef": "arxiv-workflow",
+    "addonInstance": "arXivWorkflow",
+    "prefsPrefix": "extensions.zotero.arxiv-workflow",
+    "releasePage": "https://github.com/AllanChain/zotero-arxiv-workflow/releases",
+    "updateJSON": "https://raw.githubusercontent.com/AllanChain/zotero-arxiv-workflow/main/update.json"
   },
   "main": "src/index.ts",
   "scripts": {
@@ -23,14 +23,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/windingwind/zotero-addon-template.git"
+    "url": "git+https://github.com/AllanChain/zotero-arxiv-workflow.git"
   },
-  "author": "windingwind",
+  "author": "Allan Chain",
   "license": "AGPL-3.0-or-later",
   "bugs": {
-    "url": "https://github.com/windingwind/zotero-addon-template/issues"
+    "url": "https://github.com/AllanChain/zotero-arxiv-workflow/issues"
   },
-  "homepage": "https://github.com/windingwind/zotero-addon-template#readme",
+  "homepage": "https://github.com/AllanChain/zotero-arxiv-workflow#readme",
   "dependencies": {
     "zotero-plugin-toolkit": "^2.3.29"
   },
