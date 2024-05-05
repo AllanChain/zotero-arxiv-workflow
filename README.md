@@ -9,7 +9,11 @@ This Zotero plugin addresses the pain when you store papers from arXiv and want 
 | :------------------------------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------------------------: |
 | ![Screenshot of merge arXiv](https://github.com/AllanChain/zotero-arxiv-workflow/assets/36528777/ebd7bb02-9caf-4e32-8f42-2afa7f119354) | ![Screenshot of prefer PDF](https://github.com/AllanChain/zotero-arxiv-workflow/assets/36528777/fe0dc757-6dbe-4d8b-894c-f806644686c7) |
 
-## How to use
+## Installation
+
+Download `zotero-arxiv-workflow.xpi` from the [release page](https://github.com/AllanChain/zotero-arxiv-workflow/releases). Firefox users need to right click on the link and use "Save link as" instead of direct downloading it. After downloading, click "Tools" > "Plugins" in Zotero menu and drag the downloaded file into the dialog.
+
+## How to Use
 
 ### Merge arXiv paper and the published one
 
