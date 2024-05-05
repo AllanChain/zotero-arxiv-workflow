@@ -1,23 +1,6 @@
 import { config } from "../../package.json";
 import { getString } from "../utils/locale";
-
-function catchError(
-  target: any,
-  propertyKey: string | symbol,
-  descriptor: PropertyDescriptor,
-) {
-  const original = descriptor.value;
-  descriptor.value = function (...args: any) {
-    try {
-      ztoolkit.log(`Calling ${target.name}.${String(propertyKey)}`);
-      return original.apply(this, args);
-    } catch (e) {
-      ztoolkit.log(`Error in ${target.name}.${String(propertyKey)}`, e);
-      throw e;
-    }
-  };
-  return descriptor;
-}
+import { catchError } from "./error";
 
 export class arXivMerge {
   @catchError
@@ -27,7 +10,7 @@ export class arXivMerge {
     ztoolkit.Menu.register("item", {
       tag: "menuitem",
       id: "zotero-arxiv-workflow-merge",
-      label: getString("menuitem-label"),
+      label: getString("menuitem-merge"),
       getVisibility: () => {
         const items = ZoteroPane.getSelectedItems();
         if (items.length !== 2) return false;
@@ -68,6 +51,7 @@ export class arXivMerge {
             const attachment =
               await Zotero.Items.getAsync(preprintAttachmentID);
             ztoolkit.log(attachment.toJSON());
+            // Lower the priority of the old PDF
             attachment.dateAdded = new Date().toISOString();
             attachment.save();
           }

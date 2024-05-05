@@ -1,4 +1,5 @@
 import { arXivMerge } from "./modules/arxiv-merge";
+import { PreferPDF } from "./modules/prefer-pdf";
 import { config } from "../package.json";
 import { initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
@@ -30,6 +31,7 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   window.MozXULElement.insertFTLIfNeeded(`${config.addonRef}-mainWindow.ftl`);
 
   arXivMerge.registerRightClickMenuItem();
+  PreferPDF.registerRightClickMenuItem();
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
