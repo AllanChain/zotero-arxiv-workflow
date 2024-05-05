@@ -1,0 +1,22 @@
+{
+  "hooks": {},
+  "git": {
+    "commit": true,
+    "commitMessage": "chore(release): v${version}",
+    "commitArgs": [
+      "-S"
+    ],
+    "tag": true,
+    "tagArgs": [
+      "-s"
+    ],
+    "tagAnnotation": "v${version}",
+    "push": true,
+    "pushArgs": [
+      "--follow-tags"
+    ]
+  },
+  "npm": {
+    "publish": false
+  }
+}
