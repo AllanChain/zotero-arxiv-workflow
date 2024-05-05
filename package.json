@@ -18,7 +18,7 @@
     "stop": "node scripts/stop.mjs",
     "lint": "prettier --write . && eslint . --ext .ts --fix",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "release": "release-it --preReleaseId=beta --config .release-it.json",
+    "release": "release-it --onlyVersion --preReleaseId=beta",
     "update-deps": "npm update --save"
   },
   "repository": {
@@ -116,7 +116,18 @@
   },
   "release-it": {
     "git": {
-      "tagName": "v${version}"
+      "tagName": "v${version}",
+      "commitMessage": "chore(release): v${version}",
+      "commitArgs": [
+        "-S"
+      ],
+      "tagArgs": [
+        "-s"
+      ],
+      "push": true,
+      "pushArgs": [
+        "--follow-tags"
+      ]
     },
     "npm": {
       "publish": false
