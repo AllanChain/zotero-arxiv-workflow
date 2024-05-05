@@ -1,8 +1,6 @@
-import {
-  UIExampleFactory,
-} from "./modules/examples";
+import { arXivMerge } from "./modules/arxiv-merge";
 import { config } from "../package.json";
-import { getString, initLocale } from "./utils/locale";
+import { initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
 
 async function onStartup() {
@@ -28,10 +26,10 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   // Create ztoolkit for every window
   addon.data.ztoolkit = createZToolkit();
 
-  // @ts-ignore
+  // @ts-ignore comes with the template
   window.MozXULElement.insertFTLIfNeeded(`${config.addonRef}-mainWindow.ftl`);
 
-  UIExampleFactory.registerRightClickMenuItem();
+  arXivMerge.registerRightClickMenuItem();
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
