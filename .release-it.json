@@ -10,7 +10,7 @@
     "tagArgs": [
       "-s"
     ],
-    "tagAnnotation": "v${version}",
+    "tagName": "v${version}",
     "push": true,
     "pushArgs": [
       "--follow-tags"
