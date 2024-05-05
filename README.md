@@ -1,7 +1,16 @@
 <p align="center"><img src="./addon/chrome/content/icons/favicon.svg" width="200"></p>
 <h1 align="center">arXiv Workflow for Zotero</h1>
+<p align=center>
+  <a href="https://github.com/AllanChain/logseq-live-math/releases">
+    <img src="https://img.shields.io/github/v/release/AllanChain/zotero-arxiv-workflow" alt="GitHub release">
+  </a>
+  <img src="https://img.shields.io/github/downloads/AllanChain/zotero-arxiv-workflow/total" alt="total downloads">
+</p>
 
 This Zotero plugin addresses the pain when you store papers from arXiv and want to update your Zotero entry when they are published.
+
+> [!Warning]
+> This plugin is in alpha stage and only suport Zotero 7 beta!
 
 ## Screenshots
 
