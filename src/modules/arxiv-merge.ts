@@ -28,12 +28,20 @@ export class arXivMerge {
       tag: "menuitem",
       id: "zotero-arxiv-workflow-merge",
       label: getString("menuitem-label"),
+      getVisibility: () => {
+        const items = ZoteroPane.getSelectedItems();
+        if (items.length !== 2) return false;
+        const itemTypes = items.map((item) => item.itemType);
+        if (!itemTypes.includes("preprint")) return false;
+        if (!itemTypes.includes("journalArticle")) return false;
+        return true;
+      },
       commandListener: async (ev) => {
         ztoolkit.log(ev);
         const items = ZoteroPane.getSelectedItems();
         if (items.length !== 2) {
           // @ts-expect-error null is also a valid argument
-          Zotero.alert(null, "Only merge 2", "Only supports merging 2 items.");
+          Zotero.alert(null, "Impossible", "Only supports merging 2 items.");
           return;
         }
         const preprintItem = items.find((item) => item.itemType === "preprint");
@@ -42,7 +50,7 @@ export class arXivMerge {
         );
         if (preprintItem === undefined || journalItem === undefined) {
           // @ts-expect-error null is also a valid argument
-          Zotero.alert(null, "123", "Must one arxiv one journal");
+          Zotero.alert(null, "Impossible", "Select one arXiv and one journal");
           return;
         }
         await Zotero.DB.executeTransaction(async function () {
