@@ -46,21 +46,16 @@ export class arXivUpdate {
         const popupWin = new ztoolkit.ProgressWindow("Update arXiv");
         popupWin.createLine({
           icon: menuIcon,
-          text: "Fetching arXiv page...",
+          text: "Searching for published versions...",
           progress: 0,
         });
         popupWin.show(-1);
-        const showError = (msg: string) =>
+        const showError = (msg: string) => {
           popupWin.changeLine({ text: msg, progress: 100 }).show(1000);
-        let htmlContent: string;
+        };
         try {
-          const resp = await fetch(arXivURL);
-          htmlContent = await resp.text();
-          const match = htmlContent.match(/data-doi="(?<doi>.*?)"/);
-          if (match?.groups?.doi === undefined) {
-            showError("No related DOI found");
-            return;
-          }
+          const doi = await arXivUpdate.findPublishedDOI(arXivURL);
+          if (doi === undefined) return showError("No related DOI found");
 
           popupWin.changeLine({ text: "Downloading journal...", progress: 30 });
           popupWin.show(-1);
@@ -69,14 +64,8 @@ export class arXivUpdate {
           if (collection) {
             collections = [collection.id];
           }
-          const journalItem = await createItemByZotero(
-            match.groups.doi,
-            collections,
-          );
-          if (!journalItem) {
-            showError("Failed to download");
-            return;
-          }
+          const journalItem = await createItemByZotero(doi, collections);
+          if (!journalItem) return showError("Failed to download");
           journalItem.saveTx();
 
           popupWin.changeLine({ text: "Downloading PDF...", progress: 60 });
@@ -86,17 +75,36 @@ export class arXivUpdate {
           }
           await arXivMerge.merge(preprintItem, journalItem);
 
-          popupWin.changeLine({
-            text: "arXiv paper updated to " + match.groups.doi,
-            progress: 100,
-          });
+          popupWin.changeLine({ text: "arXiv paper updated.", progress: 100 });
           popupWin.show(1000);
         } catch (err) {
           ztoolkit.log(err);
-          showError("Error updating arXiv");
-          return;
+          return showError("Error updating arXiv");
         }
       },
     });
+  }
+
+  static async findPublishedDOI(arXivURL: string): Promise<string | undefined> {
+    try {
+      const htmlResp = await fetch(arXivURL);
+      const htmlContent = await htmlResp.text();
+      const doiMatch = htmlContent.match(/data-doi="(?<doi>.*?)"/);
+      if (doiMatch?.groups?.doi) return doiMatch.groups.doi;
+    } catch (err) {
+      ztoolkit.log(err);
+    }
+    const idMatch = arXivURL.match(/\/(?<arxiv>[^/]+)$/);
+    if (idMatch?.groups?.arxiv === undefined) return;
+    const arXivID = idMatch.groups.arxiv;
+    const semanticAPI = "https://api.semanticscholar.org/graph/v1/paper";
+    const semanticURL = `${semanticAPI}/ARXIV:${arXivID}?fields=externalIds`;
+    try {
+      const jsonResp = await fetch(semanticURL);
+      const semanticJSON = await jsonResp.json();
+      return semanticJSON.externalIds?.DOI;
+    } catch (err) {
+      ztoolkit.log(err);
+    }
   }
 }
