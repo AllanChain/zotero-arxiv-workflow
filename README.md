@@ -10,12 +10,12 @@
 This Zotero plugin addresses the pain when you store papers from arXiv and want to update your Zotero entry when they are published.
 
 > [!Warning]
-> This plugin is in alpha stage and only suport Zotero 7 beta!
+> This plugin is in alpha stage and only suports Zotero 7 beta!
 
 ## Why?
 
-- The Zotero built-in merge feature does not support merging items of different type, therefore an arXiv paper and a journal article cannot merge.
-- I need the journal information from the journal item, while keep the ID the same as the arXiv one. Because many plugins store data based on item ID and I do not want to lose them.
+- The Zotero built-in merging feature does not support merging items of different type, therefore an arXiv paper and a journal article cannot merge.
+- I need the journal information from the journal item, while keeping the ID the same as the arXiv one. Because many plugins store data based on item ID, and I do not want to lose them.
 
 ## Screenshots
 
@@ -28,7 +28,7 @@ This Zotero plugin addresses the pain when you store papers from arXiv and want 
 
 ## Installation
 
-Download `zotero-arxiv-workflow.xpi` from the [release page](https://github.com/AllanChain/zotero-arxiv-workflow/releases). Firefox users need to right click on the link and use "Save link as" instead of direct downloading it. After downloading, click "Tools" > "Plugins" in Zotero menu and drag the downloaded file into the dialog.
+Download `zotero-arxiv-workflow.xpi` from the [release page](https://github.com/AllanChain/zotero-arxiv-workflow/releases). Firefox users need to right-click on the link and use "Save link as" instead of direct downloading it. After downloading, click "Tools" > "Plugins" in Zotero menu and drag the downloaded file into the dialog.
 
 ## How to Use
 
