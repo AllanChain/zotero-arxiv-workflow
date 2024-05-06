@@ -69,6 +69,6 @@ export class arXivMerge {
       }
     }
     await Zotero.Items.merge(preprintItem, [journalItem]);
-    preprintItem.clearBestAttachmentState()
+    preprintItem.clearBestAttachmentState();
   }
 }
