@@ -11,6 +11,7 @@ export class arXivMerge {
       tag: "menuitem",
       id: "zotero-arxiv-workflow-merge",
       label: getString("menuitem-merge"),
+      icon: menuIcon,
       getVisibility: () => {
         const items = ZoteroPane.getSelectedItems();
         if (items.length !== 2) return false;
@@ -36,29 +37,38 @@ export class arXivMerge {
           Zotero.alert(null, "Impossible", "Select one arXiv and one journal");
           return;
         }
-        await Zotero.DB.executeTransaction(async function () {
-          preprintItem.setType(journalItem.itemTypeID);
-          const journalJSON = journalItem.toJSON();
-          // Use date and URL form the arXiv item
-          ["dateAdded", "dateModified", "url"].forEach((field) => {
-            // @ts-ignore some fields are not listed in zotero-type
-            delete journalJSON[field];
-          });
-          ztoolkit.log(journalJSON);
-          preprintItem.fromJSON(journalJSON);
-          preprintItem.save();
-          for (const preprintAttachmentID of preprintItem.getAttachments()) {
-            const attachment =
-              await Zotero.Items.getAsync(preprintAttachmentID);
-            ztoolkit.log(attachment.toJSON());
-            // Lower the priority of the old PDF
-            attachment.dateAdded = new Date().toISOString();
-            attachment.save();
-          }
-        });
-        Zotero.Items.merge(preprintItem, [journalItem]);
+        await this.merge(preprintItem, journalItem);
       },
-      icon: menuIcon,
     });
+  }
+
+  static async merge(preprintItem: Zotero.Item, journalItem: Zotero.Item) {
+    preprintItem.setType(journalItem.itemTypeID);
+    const journalJSON = journalItem.toJSON();
+    // Use date and URL form the arXiv item
+    ["dateAdded", "dateModified", "url"].forEach((field) => {
+      // @ts-ignore some fields are not listed in zotero-type
+      delete journalJSON[field];
+    });
+    preprintItem.fromJSON(journalJSON);
+    preprintItem.saveTx();
+    let oldestPDFDate = new Date();
+    for (const attachmentID of preprintItem.getAttachments()) {
+      const attachment = await Zotero.Items.getAsync(attachmentID);
+      const attachmentDate = new Date(attachment.dateAdded);
+      if (attachmentDate.getTime() < oldestPDFDate.getTime()) {
+        oldestPDFDate = attachmentDate;
+      }
+    }
+    oldestPDFDate = new Date(oldestPDFDate.getTime() - 100);
+    for (const attachmentID of journalItem.getAttachments()) {
+      const attachment = await Zotero.Items.getAsync(attachmentID);
+      if (attachment.isPDFAttachment()) {
+        attachment.dateAdded = oldestPDFDate.toISOString();
+        attachment.saveTx();
+      }
+    }
+    await Zotero.Items.merge(preprintItem, [journalItem]);
+    preprintItem.clearBestAttachmentState()
   }
 }
