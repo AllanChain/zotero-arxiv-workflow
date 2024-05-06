@@ -3,6 +3,7 @@ import { PreferPDF } from "./modules/prefer-pdf";
 import { config } from "../package.json";
 import { initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
+import { arXivUpdate } from "./modules/arxiv-update";
 
 async function onStartup() {
   await Promise.all([
@@ -31,6 +32,7 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   window.MozXULElement.insertFTLIfNeeded(`${config.addonRef}-mainWindow.ftl`);
 
   arXivMerge.registerRightClickMenuItem();
+  arXivUpdate.registerRightClickMenuItem();
   PreferPDF.registerRightClickMenuItem();
 }
 
