@@ -1,5 +1,3 @@
-pref-title = Addon Template Example
-pref-enable =
-    .label = Enable
-pref-input = Input
-pref-help = { $name } Build { $version } { $time }
+pref-mergePreferJournalPDF =
+    .label = Prefer to open published PDF after merging
+pref-help = { $name } v{ $version }

@@ -1,6 +1,7 @@
 import { config } from "../../package.json";
 import { getString } from "../utils/locale";
 import { catchError } from "./error";
+import { getPref } from "../utils/prefs";
 
 export class arXivMerge {
   @catchError
@@ -52,21 +53,26 @@ export class arXivMerge {
     });
     preprintItem.fromJSON(journalJSON);
     preprintItem.saveTx();
-    let oldestPDFDate = new Date();
-    for (const attachmentID of preprintItem.getAttachments()) {
-      const attachment = await Zotero.Items.getAsync(attachmentID);
-      const attachmentDate = new Date(attachment.dateAdded);
-      if (attachmentDate.getTime() < oldestPDFDate.getTime()) {
-        oldestPDFDate = attachmentDate;
+    if (getPref("mergePreferJournalPDF")) {
+      let oldestPDFDate = new Date();
+      for (const attachmentID of preprintItem.getAttachments()) {
+        const attachment = await Zotero.Items.getAsync(attachmentID);
+        const attachmentDate = new Date(attachment.dateAdded);
+        if (attachmentDate.getTime() < oldestPDFDate.getTime()) {
+          oldestPDFDate = attachmentDate;
+        }
       }
-    }
-    oldestPDFDate = new Date(oldestPDFDate.getTime() - 100);
-    for (const attachmentID of journalItem.getAttachments()) {
-      const attachment = await Zotero.Items.getAsync(attachmentID);
-      if (attachment.isPDFAttachment()) {
-        attachment.dateAdded = oldestPDFDate.toISOString();
-        attachment.saveTx();
+      oldestPDFDate = new Date(oldestPDFDate.getTime() - 100);
+      for (const attachmentID of journalItem.getAttachments()) {
+        const attachment = await Zotero.Items.getAsync(attachmentID);
+        if (attachment.isPDFAttachment()) {
+          attachment.dateAdded = oldestPDFDate.toISOString();
+          attachment.saveTx();
+        }
       }
+    } else {
+      // @ts-ignore delay is not added to zotero-type
+      await Zotero.Promise.delay(); // magic sleep
     }
     await Zotero.Items.merge(preprintItem, [journalItem]);
     preprintItem.clearBestAttachmentState();

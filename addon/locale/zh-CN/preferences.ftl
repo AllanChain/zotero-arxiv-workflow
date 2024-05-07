@@ -1,5 +1,3 @@
-pref-title = 插件模板设置示例
-pref-enable =
-    .label = 开启
-pref-input = 输入
-pref-help = { $name } Build { $version } { $time }
+pref-mergePreferJournalPDF =
+    .label = 合并 arXiv 与已发表条目后，默认打开已发表的 PDF
+pref-help = { $name } v{ $version }

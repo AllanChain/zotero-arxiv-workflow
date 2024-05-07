@@ -1,9 +1,10 @@
 import { arXivMerge } from "./modules/arxiv-merge";
+import { arXivUpdate } from "./modules/arxiv-update";
 import { PreferPDF } from "./modules/prefer-pdf";
+import { Preferences } from "./modules/preferences";
 import { config } from "../package.json";
 import { initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
-import { arXivUpdate } from "./modules/arxiv-update";
 
 async function onStartup() {
   await Promise.all([
@@ -34,6 +35,7 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   arXivMerge.registerRightClickMenuItem();
   arXivUpdate.registerRightClickMenuItem();
   PreferPDF.registerRightClickMenuItem();
+  Preferences.registerPreferences();
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
