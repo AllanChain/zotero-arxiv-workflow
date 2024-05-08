@@ -108,7 +108,7 @@ export class arXivUpdate {
     const semanticURL = `${semanticAPI}/ARXIV:${arXivID}?fields=externalIds`;
     try {
       const jsonResp = await fetch(semanticURL);
-      const semanticJSON = await jsonResp.json();
+      const semanticJSON = (await jsonResp.json()) as any;
       return semanticJSON.externalIds?.DOI;
     } catch (err) {
       ztoolkit.log(err);
