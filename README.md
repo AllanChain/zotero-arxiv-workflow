@@ -4,6 +4,9 @@
   <a href="https://github.com/AllanChain/logseq-live-math/releases">
     <img src="https://img.shields.io/github/v/release/AllanChain/zotero-arxiv-workflow" alt="GitHub release">
   </a>
+  <a href="https://github.com/windingwind/zotero-plugin-template">
+    <img src="https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?logo=github" alt="Using Zotero Plugin Template">
+  </a>
   <img src="https://img.shields.io/github/downloads/AllanChain/zotero-arxiv-workflow/total" alt="total downloads">
 </p>
 
