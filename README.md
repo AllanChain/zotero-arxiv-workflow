@@ -15,7 +15,17 @@ This Zotero plugin addresses the pain when you store papers from arXiv and want 
 > [!Warning]
 > This plugin is in alpha stage and only suports Zotero 7 beta!
 
+
+## ✨ Features
+
+- 🪢 Merge a preprint item and a journal article item without pain
+- 🗃️ Easy to set which PDF to open by default
+- 📄 Search online if a arXiv paper is published and update the information and PDF accordingly
+- 🌐 Download the latest version of published PDF
+
 ## Why?
+
+Easier workflow with arXiv paper!
 
 - The Zotero built-in merging feature does not support merging items of different type, therefore an arXiv paper and a journal article cannot merge.
 - I need the journal information from the journal item, while keeping the ID the same as the arXiv one. Because many plugins store data based on item ID, and I do not want to lose them.
