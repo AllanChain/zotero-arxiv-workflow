@@ -5,6 +5,7 @@ import { Preferences } from "./modules/preferences";
 import { config } from "../package.json";
 import { initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
+import { UpdatePDF } from "./modules/update-pdf";
 
 async function onStartup() {
   await Promise.all([
@@ -35,6 +36,7 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   arXivMerge.registerRightClickMenuItem();
   arXivUpdate.registerRightClickMenuItem();
   PreferPDF.registerRightClickMenuItem();
+  UpdatePDF.registerRightClickMenuItem();
   Preferences.registerPreferences();
 }
 
