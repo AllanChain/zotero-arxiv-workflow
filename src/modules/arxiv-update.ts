@@ -1,5 +1,6 @@
 import { config } from "../../package.json";
 import { getString } from "../utils/locale";
+import { getPref } from "../utils/prefs";
 import { arXivMerge } from "./arxiv-merge";
 import { catchError } from "./error";
 
@@ -68,10 +69,16 @@ export class arXivUpdate {
           if (!journalItem) return showError("Failed to download");
           journalItem.saveTx();
 
-          popupWin.changeLine({ text: "Downloading PDF...", progress: 60 });
-          popupWin.show(-1);
-          if (Zotero.Attachments.canFindPDFForItem(journalItem)) {
-            await Zotero.Attachments.addAvailablePDF(journalItem);
+          if (
+            getPref("downloadJournalPDF") &&
+            Zotero.Attachments.canFindPDFForItem(journalItem)
+          ) {
+            popupWin.changeLine({ text: "Downloading PDF...", progress: 60 });
+            popupWin.show(-1);
+            await Zotero.Attachments.addAvailablePDF(journalItem, {
+              // @ts-ignore zotero-type mistake
+              methods: ["doi"], // Only download from publisher
+            });
           }
           await arXivMerge.merge(preprintItem, journalItem);
 
