@@ -69,3 +69,11 @@ If a published version is found, a new item will be created automatically and th
 ### 🌐 Download published PDF
 
 Say you have an arXiv paper PDF and import it into Zotero. Zotero finds that it has been published and uses the information from the published version. A few days later you might want to download the published version because it might be different from the arXiv one. With original Zotero, you have to open the journal URL, download the PDF, and add it as an attachment. With this plugin, it is as easy as right click and select "Download published PDF".
+
+## 💻 Development
+
+This repo is created from the [Zotero plugin template](https://github.com/windingwind/zotero-plugin-template), please follow the [quick start guide](https://github.com/windingwind/zotero-plugin-template?tab=readme-ov-file#quick-start-guide).
+
+The following resources are also helpful:
+- [Zotero 7 for Developers](https://www.zotero.org/support/dev/zotero_7_for_developers)
+- [Zotero Plugin Development](https://www.zotero.org/support/dev/client_coding/plugin_development)
