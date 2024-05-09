@@ -64,6 +64,10 @@ If you have merged some entries manually, those entries will by default open the
 
 If you have a preprint item for the arXiv paper, and you want to find if it has been published and update the information, you can right click on the preprint item and select "Update to a published one". This will search `arxiv.org` for the "Related DOI" field, which may be updated if the paper got published. If nothing is found, we will fall back to the [Semantic Scholar](https://www.semanticscholar.org) API.
 
+> [!Note]
+>
+> It is not trivial to correctly find the published version. If it fails, you'd better add the journal article item manually and use the merge feature this plugin provides.
+
 If a published version is found, a new item will be created automatically and the published PDF will be downloaded. Then the preprint item and the newly created journal item will be merged.
 
 ### 🌐 Download published PDF
