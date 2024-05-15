@@ -16,36 +16,41 @@ export class arXivMerge {
       getVisibility: () => {
         const items = ZoteroPane.getSelectedItems();
         if (items.length !== 2) return false;
-        const itemTypes = items.map((item) => item.itemType);
-        if (!itemTypes.includes("preprint")) return false;
-        if (!itemTypes.includes("journalArticle")) return false;
+        const { preprintItem, publishedItem } = arXivMerge.identifyItems(items);
+        if (preprintItem === undefined || publishedItem === undefined)
+          return false;
         return true;
       },
       commandListener: async (ev) => {
-        ztoolkit.log(ev);
         const items = ZoteroPane.getSelectedItems();
         if (items.length !== 2) {
           // @ts-expect-error null is also a valid argument
           Zotero.alert(null, "Impossible", "Only supports merging 2 items.");
           return;
         }
-        const preprintItem = items.find((item) => item.itemType === "preprint");
-        const journalItem = items.find(
-          (item) => item.itemType === "journalArticle",
-        );
-        if (preprintItem === undefined || journalItem === undefined) {
+        const { preprintItem, publishedItem } = arXivMerge.identifyItems(items);
+        if (preprintItem === undefined || publishedItem === undefined) {
           // @ts-expect-error null is also a valid argument
           Zotero.alert(null, "Impossible", "Select one arXiv and one journal");
           return;
         }
-        await this.merge(preprintItem, journalItem);
+        await this.merge(preprintItem, publishedItem);
       },
     });
   }
+  static identifyItems(items: Zotero.Item[]) {
+    const preprintItem = items.find((item) => item.itemType === "preprint");
+    const publishedItem = items.find((item) =>
+      (
+        ["journalArticle", "conferencePaper"] as Zotero.Item.ItemType[]
+      ).includes(item.itemType),
+    );
+    return { preprintItem, publishedItem };
+  }
 
-  static async merge(preprintItem: Zotero.Item, journalItem: Zotero.Item) {
-    preprintItem.setType(journalItem.itemTypeID);
-    const journalJSON = journalItem.toJSON();
+  static async merge(preprintItem: Zotero.Item, publishedItem: Zotero.Item) {
+    preprintItem.setType(publishedItem.itemTypeID);
+    const journalJSON = publishedItem.toJSON();
     // Use date and URL form the arXiv item
     ["dateAdded", "dateModified", "url"].forEach((field) => {
       // @ts-ignore some fields are not listed in zotero-type
@@ -63,7 +68,7 @@ export class arXivMerge {
         }
       }
       oldestPDFDate = new Date(oldestPDFDate.getTime() - 100);
-      for (const attachmentID of journalItem.getAttachments()) {
+      for (const attachmentID of publishedItem.getAttachments()) {
         const attachment = await Zotero.Items.getAsync(attachmentID);
         if (attachment.isPDFAttachment()) {
           attachment.dateAdded = oldestPDFDate.toISOString();
@@ -74,7 +79,7 @@ export class arXivMerge {
       // @ts-ignore delay is not added to zotero-type
       await Zotero.Promise.delay(); // magic sleep
     }
-    await Zotero.Items.merge(preprintItem, [journalItem]);
+    await Zotero.Items.merge(preprintItem, [publishedItem]);
     preprintItem.clearBestAttachmentState();
   }
 }
