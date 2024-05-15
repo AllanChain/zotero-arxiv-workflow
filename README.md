@@ -15,7 +15,6 @@ This Zotero plugin addresses the pain when you store papers from arXiv and want 
 > [!Warning]
 > This plugin is in alpha stage and only suports Zotero 7 beta!
 
-
 ## ✨ Features
 
 - 🪢 Merge a preprint item and a journal article item without pain
@@ -79,5 +78,6 @@ Say you have an arXiv paper PDF and import it into Zotero. Zotero finds that it 
 This repo is created from the [Zotero plugin template](https://github.com/windingwind/zotero-plugin-template), please follow the [quick start guide](https://github.com/windingwind/zotero-plugin-template?tab=readme-ov-file#quick-start-guide).
 
 The following resources are also helpful:
+
 - [Zotero 7 for Developers](https://www.zotero.org/support/dev/zotero_7_for_developers)
 - [Zotero Plugin Development](https://www.zotero.org/support/dev/client_coding/plugin_development)

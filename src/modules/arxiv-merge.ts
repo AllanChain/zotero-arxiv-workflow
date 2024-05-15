@@ -38,6 +38,7 @@ export class arXivMerge {
       },
     });
   }
+
   static identifyItems(items: Zotero.Item[]) {
     const preprintItem = items.find((item) => item.itemType === "preprint");
     const publishedItem = items.find((item) =>
