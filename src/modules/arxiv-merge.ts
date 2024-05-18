@@ -4,6 +4,8 @@ import { catchError } from "./error";
 import { getPref } from "../utils/prefs";
 
 export class arXivMerge {
+  static reservedKeys = ["dateAdded", "dateModified", "url", "extra"];
+
   @catchError
   static registerRightClickMenuItem() {
     const menuIcon = `chrome://${config.addonRef}/content/icons/favicon.svg`;
@@ -52,10 +54,11 @@ export class arXivMerge {
   static async merge(preprintItem: Zotero.Item, publishedItem: Zotero.Item) {
     preprintItem.setType(publishedItem.itemTypeID);
     const journalJSON = publishedItem.toJSON();
-    // Use date and URL form the arXiv item
-    ["dateAdded", "dateModified", "url"].forEach((field) => {
+    const preprintJSON = preprintItem.toJSON();
+    // Use date and URL from the arXiv item
+    arXivMerge.reservedKeys.forEach((field) => {
       // @ts-ignore some fields are not listed in zotero-type
-      delete journalJSON[field];
+      journalJSON[field] = preprintJSON[field];
     });
     preprintItem.fromJSON(journalJSON);
     preprintItem.saveTx();
