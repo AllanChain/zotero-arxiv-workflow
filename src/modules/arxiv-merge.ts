@@ -60,6 +60,22 @@ export class arXivMerge {
       // @ts-ignore some fields are not listed in zotero-type
       journalJSON[field] = preprintJSON[field];
     });
+    /* Avoid citation key collision after preprint item updates (say year)
+     * For example, no collision:
+     * - Published item: li_wang_2024-1
+     * - Preprint item: li_wang_2024
+     * Thing will work without problem.
+     * Collision:
+     * - Published item: li_wang_2024
+     * - Preprint item: li_wang_2023
+     * If we do nothing, after `preprintItem.saveTx`, the citation key will update
+     * to li_wang_2024-1, which is something we don't want. One approach is to fix
+     * the citation key for the preprint item. But it involves working with BBT.
+     * The workaround here is to set a random citation key for the published item.
+     * TODO: What if the user wants to keep the citation key (not fixed in BBT)?
+     */
+    publishedItem.setField("extra", `Citation Key: ${crypto.randomUUID()}`);
+    publishedItem.saveTx();
     preprintItem.fromJSON(journalJSON);
     preprintItem.saveTx();
     if (getPref("mergePreferJournalPDF")) {
