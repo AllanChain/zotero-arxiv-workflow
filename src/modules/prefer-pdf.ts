@@ -13,7 +13,6 @@ export class PreferPDF {
       getVisibility: () => {
         const items = ZoteroPane.getSelectedItems();
         if (items.length !== 1) return false;
-        ztoolkit.log(items[0].itemType);
         if (!items[0].isPDFAttachment()) return false;
         return true;
       },

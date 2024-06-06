@@ -15,8 +15,8 @@ export class UpdatePDF {
       getVisibility: () => {
         const items = ZoteroPane.getSelectedItems();
         if (items.length !== 1) return false;
-        const preprintItem = items[0];
-        if (preprintItem.itemType !== "journalArticle") return false;
+        const publishedItem = items[0];
+        if (publishedItem.itemType !== "journalArticle") return false;
         return true;
       },
       commandListener: async (ev) => {
@@ -34,7 +34,7 @@ export class UpdatePDF {
         const attachmentItem = await Zotero.Attachments.addAvailablePDF(
           journalItem,
           // @ts-ignore zotero-type mistake
-          { methods: ["doi"] }, // Only download from publisher },
+          { methods: ["doi"] }, // Only download from publisher
         );
         if (attachmentItem) {
           popupWin.changeLine({ text: "PDF Downloaded", progress: 100 });
