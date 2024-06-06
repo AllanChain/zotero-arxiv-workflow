@@ -109,7 +109,8 @@ export class arXivUpdate {
     try {
       const jsonResp = await fetch(semanticURL);
       const semanticJSON = (await jsonResp.json()) as any;
-      return semanticJSON.externalIds?.DOI;
+      const doi = semanticJSON.externalIds?.DOI as string | undefined;
+      return doi?.toLowerCase()?.includes("arxiv") ? undefined : doi
     } catch (err) {
       ztoolkit.log(err);
     }
