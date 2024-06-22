@@ -2,7 +2,7 @@
   "compilerOptions": {
     "experimentalDecorators": true,
     "module": "commonjs",
-    "target": "ES2016",
+    "target": "ES2018",
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true
