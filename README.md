@@ -110,7 +110,7 @@ If you have a preprint item for the arXiv paper, and you want to find if it has 
 >
 > It is not trivial to correctly find the published version. If it fails, you'd better add the journal article item manually and use the merge feature this plugin provides.
 
-If a published version is found, a new item will be created automatically and the published PDF will be downloaded. Then the preprint item and the newly created journal item will be merged.
+If a published version is found, a new item will be created automatically and the published PDF will be downloaded. Then the preprint item and the newly created journal item will be merged with the same logic as mentioned earlier.
 
 ### 🌐 Download published PDF
 
