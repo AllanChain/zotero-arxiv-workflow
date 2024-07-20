@@ -146,7 +146,7 @@ function prepareUpdateJson() {
   }
 
   const updateLink =
-    config.updateLink ?? isPreRelease
+    (config.updateLink ?? isPreRelease)
       ? `${config.releasePage}/download/v${version}/${name}.xpi`
       : `${config.releasePage}/latest/download/${name}.xpi`;
 

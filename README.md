@@ -48,25 +48,25 @@ This plugin focusing on the following workflow:
 The main logic of the merging process is demonstrated by the following plot:
 
 ```
-Before:                                     After:             
+Before:                                     After:
 ====================                        ====================
 ItemID A (preprint)                         ItemID B
 --------------------                        --------------------
-Metadata A:                                 Metadata A:         
+Metadata A:                                 Metadata A:
 Date added (A)                              Date added (B)
 URL (A)                                     URL (A)
 ...                                         ...
 --------------------               \        --------------------
-PDF attachment a*         ----------\       PDF attachment a*   
+PDF attachment a*         ----------\       PDF attachment a*
 ...                       ----------/       PDF attachment b
 ====================               /        Web Link attachment
 ItemID B (published)                        ...
 --------------------                        ====================
-Metadata B                                  
+Metadata B
 Date added (B)                              * means prefered PDF
 URL (B)
 ...
---------------------       
+--------------------
 PDF attachment b*
 ...
 ====================
