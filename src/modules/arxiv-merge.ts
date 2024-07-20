@@ -51,7 +51,29 @@ export class arXivMerge {
     return { preprintItem, publishedItem };
   }
 
-  static async merge(preprintItem: Zotero.Item, publishedItem: Zotero.Item) {
+  static async merge(
+    preprintItem: Zotero.Item,
+    publishedItem: Zotero.Item,
+    suppressWarn = false,
+  ) {
+    if (
+      !suppressWarn &&
+      preprintItem.getDisplayTitle() !== publishedItem.getDisplayTitle()
+    ) {
+      let confirmMsg = getString("merge-confirm-msg");
+      confirmMsg += `\n- ${preprintItem.getDisplayTitle()}`;
+      confirmMsg += `\n- ${publishedItem.getDisplayTitle()}`;
+      if (
+        !Services.prompt.confirm(
+          // @ts-expect-error window is also a valid argument
+          window,
+          getString("merge-confirm-title"),
+          confirmMsg,
+        )
+      ) {
+        return;
+      }
+    }
     preprintItem.setType(publishedItem.itemTypeID);
     const journalJSON = publishedItem.toJSON();
     const preprintJSON = preprintItem.toJSON();

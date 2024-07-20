@@ -80,7 +80,7 @@ export class arXivUpdate {
               methods: ["doi"], // Only download from publisher
             });
           }
-          await arXivMerge.merge(preprintItem, journalItem);
+          await arXivMerge.merge(preprintItem, journalItem, true);
 
           popupWin.changeLine({ text: "arXiv paper updated.", progress: 100 });
           popupWin.show(1000);
