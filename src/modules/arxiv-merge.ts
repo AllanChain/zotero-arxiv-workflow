@@ -4,7 +4,7 @@ import { catchError } from "./error";
 import { getPref } from "../utils/prefs";
 
 export class arXivMerge {
-  static reservedKeys = ["dateAdded", "dateModified", "url", "extra"];
+  static reservedKeys = ["dateAdded", "dateModified", "extra"];
 
   @catchError
   static registerRightClickMenuItem() {
@@ -55,7 +55,7 @@ export class arXivMerge {
     preprintItem.setType(publishedItem.itemTypeID);
     const journalJSON = publishedItem.toJSON();
     const preprintJSON = preprintItem.toJSON();
-    // Use date and URL from the arXiv item
+    // Use date from the arXiv item
     arXivMerge.reservedKeys.forEach((field) => {
       // @ts-ignore some fields are not listed in zotero-type
       journalJSON[field] = preprintJSON[field];
@@ -78,6 +78,26 @@ export class arXivMerge {
     publishedItem.saveTx();
     preprintItem.fromJSON(journalJSON);
     preprintItem.saveTx();
+    /* Create a web link attachment for arXiv URL.
+     * Some preprint items already has a snapshot attachment containing the URL.
+     * In that case we will skip the creation of the link attachment.
+     */
+    let hasSnapshot = false;
+    for (const attachmentID of preprintItem.getAttachments()) {
+      const attachment = await Zotero.Items.getAsync(attachmentID);
+      if (attachment.isSnapshotAttachment()) {
+        hasSnapshot = true;
+        break;
+      }
+    }
+    if (!hasSnapshot) {
+      Zotero.Attachments.linkFromURL({
+        url: preprintJSON.url,
+        parentItemID: preprintItem.id,
+        title: preprintJSON.archiveID ?? "Preprint URL",
+      });
+    }
+    // Set prefered PDF
     if (getPref("mergePreferJournalPDF")) {
       let oldestPDFDate = new Date();
       for (const attachmentID of preprintItem.getAttachments()) {
