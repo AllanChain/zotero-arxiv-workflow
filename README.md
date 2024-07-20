@@ -29,6 +29,49 @@ Easier workflow with arXiv paper!
 - The Zotero built-in merging feature does not support merging items of different type, therefore an arXiv paper and a journal article cannot merge.
 - I need the journal information from the journal item, while keeping the ID the same as the arXiv one. Because many plugins store data based on item ID, and I do not want to lose them.
 
+## 🪐 How?
+
+This plugin focusing on the following workflow:
+
+- One parent item for both arXiv and published version.
+  - Keeping both items and relating them is also possible in Zotero, but not the focus of this plugin.
+- Item ID from the preprint item is used.
+  - Some plugins store data based on item ID.
+- Metadata from the published version is used.
+  - Usually, only the metadata of the publish version is needed to cite.
+  - However, something like the creation date follows the preprint item.
+  - The URL for the preprint is kept in the snapshot or web link attachment.
+- PDFs from both versions are kept.
+  - In case there are some annotations on the preprint PDF.
+  - And it is configurable which PDF to open by default.
+
+The main logic of the merging process is demonstrated by the following plot:
+
+```
+Before:                                     After:             
+====================                        ====================
+ItemID A (preprint)                         ItemID B
+--------------------                        --------------------
+Metadata A:                                 Metadata A:         
+Date added (A)                              Date added (B)
+URL (A)                                     URL (A)
+...                                         ...
+--------------------               \        --------------------
+PDF attachment a*         ----------\       PDF attachment a*   
+...                       ----------/       PDF attachment b
+====================               /        Web Link attachment
+ItemID B (published)                        ...
+--------------------                        ====================
+Metadata B                                  
+Date added (B)                              * means prefered PDF
+URL (B)
+...
+--------------------       
+PDF attachment b*
+...
+====================
+```
+
 ## 📸 Screenshots
 
 |          Merge arXiv           |          Prefer PDF           |
