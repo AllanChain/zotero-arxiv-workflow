@@ -1,7 +1,7 @@
 <p align="center"><img src="./addon/chrome/content/icons/favicon.svg" width="200"></p>
 <h1 align="center">arXiv Workflow for Zotero</h1>
 <p align=center>
-  <a href="https://github.com/AllanChain/logseq-live-math/releases">
+  <a href="https://github.com/AllanChain/zotero-arxiv-workflow/releases">
     <img src="https://img.shields.io/github/v/release/AllanChain/zotero-arxiv-workflow" alt="GitHub release">
   </a>
   <a href="https://github.com/windingwind/zotero-plugin-template">
