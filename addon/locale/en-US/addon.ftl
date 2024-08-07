@@ -1,7 +1,15 @@
 menuitem-merge = Merge arXiv
 menuitem-prefer = Prefer this PDF
-menuitem-update = Update
+menuitem-update = Update arXiv paper
 menuitem-update-pdf = Download published PDF
 prefs-title = arXiv Workflow
 merge-confirm-title = Merge Items
 merge-confirm-msg = Are you sure to merge items with different title?
+update-prompt-find-published = Finding published version...
+update-prompt-find-arxiv = Finding new arXiv version...
+update-prompt-uptodate = Already up-to-date
+update-prompt-download-pdf = Downloading PDF...
+update-prompt-download-paper = Downloading paper...
+update-prompt-download-fail = Failed to download
+update-prompt-updated = arXiv paper updated
+update-prompt-error = Error updating arXiv paper

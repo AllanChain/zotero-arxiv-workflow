@@ -44,45 +44,56 @@ export class arXivUpdate {
       commandListener: async (ev) => {
         const preprintItem = ZoteroPane.getSelectedItems()[0];
         const arXivURL = preprintItem.getField("url");
-        const popupWin = new ztoolkit.ProgressWindow("Update arXiv");
+        const popupWin = new ztoolkit.ProgressWindow(
+          getString("menuitem-update"),
+        );
         popupWin.createLine({
           icon: menuIcon,
-          text: "Searching for published versions...",
+          text: getString("update-prompt-find-published"),
           progress: 0,
         });
         popupWin.show(-1);
         const showError = (msg: string) => {
-          popupWin.changeLine({ text: msg, progress: 100 }).show(1000);
+          popupWin
+            .changeLine({ text: getString(msg), progress: 100 })
+            .show(1000);
         };
         try {
           const doi = await arXivUpdate.findPublishedDOI(arXivURL);
           if (doi === undefined) {
             // Find new arXiv version instead
             popupWin.changeLine({
-              text: "Searching for new arXiv version...",
+              text: getString("update-prompt-find-arxiv"),
               progress: 30,
             });
             popupWin.show(-1);
             const onlineVersion =
               await arXivUpdate.arXivHasNewVersion(preprintItem);
-            if (onlineVersion === false) return showError("Already up-to-date");
-            popupWin.changeLine({ text: "Downloading PDF...", progress: 60 });
+            if (onlineVersion === false)
+              return showError("update-prompt-uptodate");
+            popupWin.changeLine({
+              text: getString("update-prompt-download-pdf"),
+              progress: 60,
+            });
             const attachment = await Zotero.Attachments.addPDFFromURLs(
               preprintItem,
               Zotero.Attachments.getPDFResolvers(preprintItem, ["url"]),
             );
-            if (!attachment) return showError("Failed to download PDF");
+            if (!attachment) return showError("update-prompt-download-fail");
             attachment.setField("title", `v${onlineVersion} PDF`);
             attachment.saveTx();
             popupWin.changeLine({
-              text: "arXiv paper updated.",
+              text: getString("update-prompt-updated"),
               progress: 100,
             });
             popupWin.show(1000);
             return;
           }
           // Download published version
-          popupWin.changeLine({ text: "Downloading journal...", progress: 30 });
+          popupWin.changeLine({
+            text: getString("update-prompt-download-paper"),
+            progress: 30,
+          });
           popupWin.show(-1);
           const collection = ZoteroPane.getSelectedCollection();
           let collections: number[] = [];
@@ -90,14 +101,17 @@ export class arXivUpdate {
             collections = [collection.id];
           }
           const journalItem = await createItemByZotero(doi, collections);
-          if (!journalItem) return showError("Failed to download");
+          if (!journalItem) return showError("update-prompt-download-fail");
           journalItem.saveTx();
 
           if (
             getPref("downloadJournalPDF") &&
             Zotero.Attachments.canFindPDFForItem(journalItem)
           ) {
-            popupWin.changeLine({ text: "Downloading PDF...", progress: 60 });
+            popupWin.changeLine({
+              text: getString("update-prompt-download-pdf"),
+              progress: 60,
+            });
             popupWin.show(-1);
             await Zotero.Attachments.addAvailablePDF(journalItem, {
               // @ts-ignore zotero-type mistake
@@ -106,11 +120,14 @@ export class arXivUpdate {
           }
           await arXivMerge.merge(preprintItem, journalItem, true);
 
-          popupWin.changeLine({ text: "arXiv paper updated.", progress: 100 });
+          popupWin.changeLine({
+            text: getString("update-prompt-updated"),
+            progress: 100,
+          });
           popupWin.show(1000);
         } catch (err) {
           ztoolkit.log(err);
-          return showError("Error updating arXiv");
+          return showError("update-prompt-error");
         }
       },
     });

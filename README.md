@@ -104,7 +104,7 @@ If you have merged some entries manually, those entries will by default open the
 
 ### 📄 Search for updated version of an arXiv paper
 
-If you have a preprint item for the arXiv paper, and you want to find if it has been published on journals or updated on arXiv, and then update the information, you can right click on the preprint item and select "Update". This will search `arxiv.org` for the "Related DOI" field, which may be updated if the paper got published. If nothing is found, we will fall back to the [Semantic Scholar](https://www.semanticscholar.org) API.
+If you have a preprint item for the arXiv paper, and you want to find if it has been published on journals or updated on arXiv, and then update the information, you can right click on the preprint item and select "Update arXiv paper". This will search `arxiv.org` for the "Related DOI" field, which may be updated if the paper got published. If nothing is found, we will fall back to the [Semantic Scholar](https://www.semanticscholar.org) API.
 
 > [!Note]
 >
