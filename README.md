@@ -19,7 +19,7 @@ This Zotero plugin addresses the pain when you store papers from arXiv and want 
 
 - 🪢 Merge a preprint item and a journal article item without pain
 - 🗃️ Easy to set which PDF to open by default
-- 📄 Search online if a arXiv paper is published and update the information and PDF accordingly
+- 📄 Search online if a arXiv paper is published or updated and update the information and PDF accordingly
 - 🌐 Download the latest version of published PDF
 
 ## 🤔 Why?
@@ -102,9 +102,9 @@ This will also make the published PDF as the default PDF.
 
 If you have merged some entries manually, those entries will by default open the arXiv PDF. To make Zotero open the published PDF by default, you can select the published PDF, right click, and select "Prefer this PDF".
 
-### 📄 Search for published version of an arXiv paper
+### 📄 Search for updated version of an arXiv paper
 
-If you have a preprint item for the arXiv paper, and you want to find if it has been published and update the information, you can right click on the preprint item and select "Update to a published one". This will search `arxiv.org` for the "Related DOI" field, which may be updated if the paper got published. If nothing is found, we will fall back to the [Semantic Scholar](https://www.semanticscholar.org) API.
+If you have a preprint item for the arXiv paper, and you want to find if it has been published on journals or updated on arXiv, and then update the information, you can right click on the preprint item and select "Update". This will search `arxiv.org` for the "Related DOI" field, which may be updated if the paper got published. If nothing is found, we will fall back to the [Semantic Scholar](https://www.semanticscholar.org) API.
 
 > [!Note]
 >

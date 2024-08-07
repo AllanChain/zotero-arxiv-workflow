@@ -56,8 +56,32 @@ export class arXivUpdate {
         };
         try {
           const doi = await arXivUpdate.findPublishedDOI(arXivURL);
-          if (doi === undefined) return showError("No related DOI found");
-
+          if (doi === undefined) {
+            // Find new arXiv version instead
+            popupWin.changeLine({
+              text: "Searching for new arXiv version...",
+              progress: 30,
+            });
+            popupWin.show(-1);
+            const onlineVersion =
+              await arXivUpdate.arXivHasNewVersion(preprintItem);
+            if (onlineVersion === false) return showError("Already up-to-date");
+            popupWin.changeLine({ text: "Downloading PDF...", progress: 60 });
+            const attachment = await Zotero.Attachments.addPDFFromURLs(
+              preprintItem,
+              Zotero.Attachments.getPDFResolvers(preprintItem, ["url"]),
+            );
+            if (!attachment) return showError("Failed to download PDF");
+            attachment.setField("title", `v${onlineVersion} PDF`);
+            attachment.saveTx();
+            popupWin.changeLine({
+              text: "arXiv paper updated.",
+              progress: 100,
+            });
+            popupWin.show(1000);
+            return;
+          }
+          // Download published version
           popupWin.changeLine({ text: "Downloading journal...", progress: 30 });
           popupWin.show(-1);
           const collection = ZoteroPane.getSelectedCollection();
@@ -114,5 +138,30 @@ export class arXivUpdate {
     } catch (err) {
       ztoolkit.log(err);
     }
+  }
+
+  static async arXivHasNewVersion(
+    preprintItem: Zotero.Item,
+  ): Promise<false | number> {
+    let localVersion = 0;
+    for (const attachmentID of preprintItem.getAttachments()) {
+      const attachment = await Zotero.Items.getAsync(attachmentID);
+      if (!attachment.isPDFAttachment()) continue;
+      const fullText = await Zotero.PDFWorker.getFullText(attachmentID, 1);
+      const match = fullText.text.match(/arXiv:[\d.]+v(\d+)/);
+      if (!match) continue;
+      const currentPDFVersion = parseInt(match[1], 10);
+      if (currentPDFVersion > localVersion) {
+        localVersion = currentPDFVersion;
+      }
+    }
+    ztoolkit.log(`Current arXiv version: ${localVersion}`);
+    if (localVersion === 0) return false;
+    const htmlResp = await fetch(preprintItem.getField("url"));
+    const htmlContent = await htmlResp.text();
+    const match = htmlContent.match(/<strong>\[v(\d+)\]<\/strong>/);
+    if (!match) return false;
+    const onlineVersion = parseInt(match[1], 10);
+    return onlineVersion > localVersion ? onlineVersion : false;
   }
 }
