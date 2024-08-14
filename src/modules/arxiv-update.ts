@@ -23,15 +23,16 @@ async function createItemByZotero(
 }
 
 export class arXivUpdate {
+  static menuIcon = `chrome://${config.addonRef}/content/icons/favicon.svg`;
+
   @catchError
   static registerRightClickMenuItem() {
-    const menuIcon = `chrome://${config.addonRef}/content/icons/favicon.svg`;
     // item menuitem with icon
     ztoolkit.Menu.register("item", {
       tag: "menuitem",
       id: "zotero-arxiv-workflow-update",
       label: getString("menuitem-update"),
-      icon: menuIcon,
+      icon: arXivUpdate.menuIcon,
       getVisibility: () => {
         const items = ZoteroPane.getSelectedItems();
         if (items.length !== 1) return false;
@@ -43,94 +44,76 @@ export class arXivUpdate {
       },
       commandListener: async (ev) => {
         const preprintItem = ZoteroPane.getSelectedItems()[0];
-        const arXivURL = preprintItem.getField("url");
-        const popupWin = new ztoolkit.ProgressWindow(
-          getString("menuitem-update"),
-        );
-        popupWin.createLine({
-          icon: menuIcon,
-          text: getString("update-prompt-find-published"),
-          progress: 0,
-        });
-        popupWin.show(-1);
-        const showError = (msg: string) => {
-          popupWin
-            .changeLine({ text: getString(msg), progress: 100 })
-            .show(1000);
-        };
-        try {
-          const doi = await arXivUpdate.findPublishedDOI(arXivURL);
-          if (doi === undefined) {
-            // Find new arXiv version instead
-            popupWin.changeLine({
-              text: getString("update-prompt-find-arxiv"),
-              progress: 30,
-            });
-            popupWin.show(-1);
-            const onlineVersion =
-              await arXivUpdate.arXivHasNewVersion(preprintItem);
-            if (onlineVersion === false)
-              return showError("update-prompt-uptodate");
-            popupWin.changeLine({
-              text: getString("update-prompt-download-pdf"),
-              progress: 60,
-            });
-            const attachment = await Zotero.Attachments.addPDFFromURLs(
-              preprintItem,
-              Zotero.Attachments.getPDFResolvers(preprintItem, ["url"]),
-            );
-            if (!attachment) return showError("update-prompt-download-fail");
-            attachment.setField("title", `v${onlineVersion} PDF`);
-            attachment.saveTx();
-            popupWin.changeLine({
-              text: getString("update-prompt-updated"),
-              progress: 100,
-            });
-            popupWin.show(1000);
-            return;
-          }
-          // Download published version
-          popupWin.changeLine({
-            text: getString("update-prompt-download-paper"),
-            progress: 30,
-          });
-          popupWin.show(-1);
-          const collection = ZoteroPane.getSelectedCollection();
-          let collections: number[] = [];
-          if (collection) {
-            collections = [collection.id];
-          }
-          const journalItem = await createItemByZotero(doi, collections);
-          if (!journalItem) return showError("update-prompt-download-fail");
-          journalItem.saveTx();
-
-          if (
-            getPref("downloadJournalPDF") &&
-            Zotero.Attachments.canFindPDFForItem(journalItem)
-          ) {
-            popupWin.changeLine({
-              text: getString("update-prompt-download-pdf"),
-              progress: 60,
-            });
-            popupWin.show(-1);
-            await Zotero.Attachments.addAvailablePDF(journalItem, {
-              // @ts-ignore zotero-type mistake
-              methods: ["doi"], // Only download from publisher
-            });
-          }
-          await arXivMerge.merge(preprintItem, journalItem, true);
-
-          popupWin.changeLine({
-            text: getString("update-prompt-updated"),
-            progress: 100,
-          });
-          popupWin.show(1000);
-        } catch (err) {
-          ztoolkit.log(err);
-          return showError("update-prompt-error");
-        }
+        arXivUpdate.update(preprintItem);
       },
     });
+  }
+
+  static async update(preprintItem: Zotero.Item) {
+    const tr = (branch: string) => getString("update-prompt", branch);
+    const arXivURL = preprintItem.getField("url");
+    const popupWin = new ztoolkit.ProgressWindow(getString("update-prompt"));
+    popupWin.createLine({
+      icon: arXivUpdate.menuIcon,
+      text: tr("find-published"),
+      progress: 0,
+    });
+    popupWin.show(-1);
+    const showError = (msg: string) => {
+      popupWin.changeLine({ text: tr(msg), progress: 100 }).show(1000);
+    };
+    try {
+      const doi = await arXivUpdate.findPublishedDOI(arXivURL);
+      if (doi === undefined) {
+        // Find new arXiv version instead
+        popupWin.changeLine({ text: tr("find-arxiv"), progress: 30 });
+        popupWin.show(-1);
+        const onlineVersion =
+          await arXivUpdate.arXivHasNewVersion(preprintItem);
+        if (onlineVersion === undefined) return showError("unknown-version");
+        if (onlineVersion === false) return showError("uptodate");
+        popupWin.changeLine({ text: tr("download-pdf"), progress: 60 });
+        const attachment = await Zotero.Attachments.addPDFFromURLs(
+          preprintItem,
+          Zotero.Attachments.getPDFResolvers(preprintItem, ["url"]),
+        );
+        if (!attachment) return showError("download-fail");
+        attachment.setField("title", `v${onlineVersion} PDF`);
+        attachment.saveTx();
+        popupWin.changeLine({ text: tr("updated"), progress: 100 });
+        popupWin.show(1000);
+        return;
+      }
+      // Download published version
+      popupWin.changeLine({ text: tr("download-paper"), progress: 30 });
+      popupWin.show(-1);
+      const collection = ZoteroPane.getSelectedCollection();
+      let collections: number[] = [];
+      if (collection) {
+        collections = [collection.id];
+      }
+      const journalItem = await createItemByZotero(doi, collections);
+      if (!journalItem) return showError("download-fail");
+      journalItem.saveTx();
+
+      if (
+        getPref("downloadJournalPDF") &&
+        Zotero.Attachments.canFindPDFForItem(journalItem)
+      ) {
+        popupWin.changeLine({ text: tr("download-pdf"), progress: 60 });
+        popupWin.show(-1);
+        await Zotero.Attachments.addAvailablePDF(journalItem, {
+          // @ts-ignore zotero-type mistake
+          methods: ["doi"], // Only download from publisher
+        });
+      }
+      await arXivMerge.merge(preprintItem, journalItem, true);
+
+      popupWin.changeLine({ text: tr("updated"), progress: 100 }).show(1000);
+    } catch (err) {
+      ztoolkit.log(err);
+      return showError("error");
+    }
   }
 
   static async findPublishedDOI(arXivURL: string): Promise<string | undefined> {
@@ -159,7 +142,7 @@ export class arXivUpdate {
 
   static async arXivHasNewVersion(
     preprintItem: Zotero.Item,
-  ): Promise<false | number> {
+  ): Promise<undefined | false | number> {
     let localVersion = 0;
     for (const attachmentID of preprintItem.getAttachments()) {
       const attachment = await Zotero.Items.getAsync(attachmentID);
@@ -173,7 +156,7 @@ export class arXivUpdate {
       }
     }
     ztoolkit.log(`Current arXiv version: ${localVersion}`);
-    if (localVersion === 0) return false;
+    if (localVersion === 0) return undefined;
     const htmlResp = await fetch(preprintItem.getField("url"));
     const htmlContent = await htmlResp.text();
     const match = htmlContent.match(/<strong>\[v(\d+)\]<\/strong>/);

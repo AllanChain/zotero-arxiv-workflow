@@ -60,14 +60,14 @@ export class arXivMerge {
       !suppressWarn &&
       preprintItem.getDisplayTitle() !== publishedItem.getDisplayTitle()
     ) {
-      let confirmMsg = getString("merge-confirm-msg");
+      let confirmMsg = getString("merge-confirm", "msg");
       confirmMsg += `\n- ${preprintItem.getDisplayTitle()}`;
       confirmMsg += `\n- ${publishedItem.getDisplayTitle()}`;
       if (
         !Services.prompt.confirm(
           // @ts-expect-error window is also a valid argument
           window,
-          getString("merge-confirm-title"),
+          getString("merge-confirm"),
           confirmMsg,
         )
       ) {
