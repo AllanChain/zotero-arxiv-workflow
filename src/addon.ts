@@ -1,3 +1,7 @@
+import { arXivMerge } from "./modules/arxiv-merge";
+import { arXivUpdate } from "./modules/arxiv-update";
+import { PreferPDF } from "./modules/prefer-pdf";
+import { UpdatePDF } from "./modules/update-pdf";
 import { ColumnOptions } from "zotero-plugin-toolkit/dist/helpers/virtualizedTable";
 import { DialogHelper } from "zotero-plugin-toolkit/dist/helpers/dialog";
 import hooks from "./hooks";
@@ -31,7 +35,12 @@ class Addon {
       ztoolkit: createZToolkit(),
     };
     this.hooks = hooks;
-    this.api = {};
+    this.api = {
+      arXivMerge: arXivMerge.merge,
+      arXivUpdate: arXivUpdate.update,
+      preferPDF: PreferPDF.prefer,
+      updatePDF: UpdatePDF.update,
+    };
   }
 }
 

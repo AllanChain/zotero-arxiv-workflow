@@ -17,25 +17,28 @@ export class PreferPDF {
         return true;
       },
       commandListener: async (ev) => {
-        ztoolkit.log(ev);
         const selectedAttachment = ZoteroPane.getSelectedItems()[0];
-        const item = selectedAttachment.parentItem!;
-        let oldestPDFDate = new Date();
-        for (const attachmentID of item.getAttachments()) {
-          const attachment = await Zotero.Items.getAsync(attachmentID);
-          if (!attachment.isPDFAttachment()) continue;
-          ztoolkit.log(attachment.toJSON());
-          const attachmentDate = new Date(attachment.dateAdded);
-          if (attachmentDate.getTime() < oldestPDFDate.getTime()) {
-            oldestPDFDate = attachmentDate;
-          }
-        }
-        oldestPDFDate = new Date(oldestPDFDate.getTime() - 100);
-        selectedAttachment.dateAdded = oldestPDFDate.toISOString();
-        selectedAttachment.saveTx();
-        item.clearBestAttachmentState();
+        PreferPDF.prefer(selectedAttachment);
       },
       icon: menuIcon,
     });
+  }
+
+  static async prefer(selectedAttachment: Zotero.Item) {
+    const item = selectedAttachment.parentItem!;
+    let oldestPDFDate = new Date();
+    for (const attachmentID of item.getAttachments()) {
+      const attachment = await Zotero.Items.getAsync(attachmentID);
+      if (!attachment.isPDFAttachment()) continue;
+      ztoolkit.log(attachment.toJSON());
+      const attachmentDate = new Date(attachment.dateAdded);
+      if (attachmentDate.getTime() < oldestPDFDate.getTime()) {
+        oldestPDFDate = attachmentDate;
+      }
+    }
+    oldestPDFDate = new Date(oldestPDFDate.getTime() - 100);
+    selectedAttachment.dateAdded = oldestPDFDate.toISOString();
+    selectedAttachment.saveTx();
+    item.clearBestAttachmentState();
   }
 }
