@@ -24,6 +24,12 @@ export class PreferPDF {
     });
   }
 
+  /* Tell Zotero to perfer selected PDF
+   *
+   * Zotero determines the prefered PDF by checking:
+   * - If the URL of the attachment matches the URL of the parentItem
+   * - If it's the first-added PDF
+   */
   static async prefer(selectedAttachment: Zotero.Item) {
     const item = selectedAttachment.parentItem!;
     let oldestPDFDate = new Date();
@@ -37,6 +43,7 @@ export class PreferPDF {
       }
     }
     oldestPDFDate = new Date(oldestPDFDate.getTime() - 100);
+    selectedAttachment.setField("url", item.getField("url"));
     selectedAttachment.dateAdded = oldestPDFDate.toISOString();
     selectedAttachment.saveTx();
     item.clearBestAttachmentState();
