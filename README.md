@@ -104,7 +104,6 @@ The main logic of merging items is described [above](#-how). A few points to emp
 <details>
 <summary>JavaScript API</summary>
 
-
 ```typescript
 async Zotero.arXivWorkflow.merge(
   preprintItem: Zotero.Item,
@@ -130,12 +129,13 @@ To use this feature, select (and only select) the PDF you want to open by defaul
 Under the hood, this plugin does something "dirty".
 </summary>
 
-
 That is because Zotero does not have the functionality of setting the default PDF to open.
 It determines the PDF to open by checking and sorting by:
+
 - The attachment is a PDF
 - The URL field of the PDF matches the URL of the parent item
 - `dateAdded` of the PDF
+
 Or in SQL:
 
 ```sql
@@ -143,13 +143,13 @@ ORDER BY contentType='application/pdf' DESC, url=? DESC, dateAdded ASC
 ```
 
 Therefore, to make Zotero perfer a specific PDF, this plugin
+
 1. sets URL field of the PDF attachment the same as that of parent item
 2. sets the `dateAdded` field to be the oldest among all PDFs of parent item
 </details>
 
 <details>
 <summary>JavaScript API</summary>
-
 
 ```typescript
 async Zotero.arXivWorkflow.preferPDF(
@@ -164,9 +164,10 @@ This function assumes that the argument is a PDF attachment. Currently, no check
 ### 📄 Search for updated version of an arXiv paper
 
 If you have a preprint item for the arXiv paper, and you want to find if it has been published on journals or updated on arXiv, and then update the information, you can right click on the preprint item and select "Update arXiv paper". This will search:
+
 1. Published versions by trying:
-    1. [arXiv](https://arxiv.org) for the "Related DOI" field, which may be updated if the paper got published
-    2. [Semantic Scholar](https://www.semanticscholar.org) API
+   1. [arXiv](https://arxiv.org) for the "Related DOI" field, which may be updated if the paper got published
+   2. [Semantic Scholar](https://www.semanticscholar.org) API
 2. If no published version found, the plugin will search [arXiv](https://arxiv.org) for updated versions
 
 > [!Note]
@@ -178,7 +179,6 @@ After that, the preprint item and the newly created journal item will be merged 
 
 <details>
 <summary>JavaScript API</summary>
-
 
 ```typescript
 async Zotero.arXivWorkflow.arXivUpdate(
@@ -200,7 +200,6 @@ Say you have an arXiv paper PDF and import it into Zotero. Zotero finds that it 
 
 <details>
 <summary>JavaScript API</summary>
-
 
 ```typescript
 async Zotero.arXivWorkflow.updatePDF(
