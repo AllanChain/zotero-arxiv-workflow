@@ -89,6 +89,8 @@ Download `zotero-arxiv-workflow.xpi` from the [release page](https://github.com/
 
 ## 🎈 Explanation of each feature
 
+Features can be disabled from the plugin settings, but this will not affect the JavaScript API.
+
 ### 🪢 Merge arXiv paper and the published one
 
 The main logic of merging items is described [above](#-how). A few points to emphasis:

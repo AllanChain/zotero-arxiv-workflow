@@ -6,6 +6,7 @@ import { config } from "../package.json";
 import { initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
 import { UpdatePDF } from "./modules/update-pdf";
+import { getPref } from "./utils/prefs";
 
 async function onStartup() {
   await Promise.all([
@@ -33,11 +34,11 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   // @ts-ignore comes with the template
   window.MozXULElement.insertFTLIfNeeded(`${config.addonRef}-mainWindow.ftl`);
 
-  arXivMerge.registerRightClickMenuItem();
-  arXivUpdate.registerRightClickMenuItem();
-  PreferPDF.registerRightClickMenuItem();
-  UpdatePDF.registerRightClickMenuItem();
   Preferences.registerPreferences();
+  if (getPref("features.arXivMerge")) arXivMerge.registerRightClickMenuItem();
+  if (getPref("features.arXivUpdate")) arXivUpdate.registerRightClickMenuItem();
+  if (getPref("features.preferPDF")) PreferPDF.registerRightClickMenuItem();
+  if (getPref("features.updatePDF")) UpdatePDF.registerRightClickMenuItem();
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
