@@ -171,7 +171,8 @@ If you have a preprint item for the arXiv paper, and you want to find if it has 
 >
 > It is not trivial to correctly find the published version. If it fails, you'd better add the journal article item manually and use the merge feature this plugin provides.
 
-If a published version is found, a new item will be created automatically and the published PDF will be downloaded. Then the preprint item and the newly created journal item will be merged with the same logic as mentioned earlier.
+If a published version is found, a new item will be created automatically and the published PDF will be downloaded. If you do not have access to the journal PDFs, you can disable downloading PDF from settings, and just update the metadata.
+After that, the preprint item and the newly created journal item will be merged with the same logic as mentioned earlier.
 
 <details>
 <summary>JavaScript API</summary>
@@ -189,6 +190,10 @@ This function assumes that the argument is an arXiv item, and no checks will be 
 
 ### 🌐 Download latest PDF
 
+> [!INFO]
+>
+> This feature requires journal subscription.
+
 Say you have an arXiv paper PDF and import it into Zotero. Zotero finds that it has been published and uses the information from the published version. A few days later you might want to download the published version because it might be different from the arXiv one. With original Zotero, you have to open the journal URL, download the PDF, and add it as an attachment. With this plugin, it is as easy as right click and select "Download latest PDF".
 
 <details>
@@ -203,7 +208,7 @@ async Zotero.arXivWorkflow.updatePDF(
 
 This function assumes that the argument is an journal item, and no checks will be performed to ensure this. The function caller is responsible to perform the checks.
 
-Under the hood, this just calls `Zotero.Attachments.addAvailablePDF`.
+Under the hood, this just calls `Zotero.Attachments.addAvailablePDF` and limits the download source to DOI only.
 
 </details>
 
