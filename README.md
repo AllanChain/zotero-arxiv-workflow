@@ -14,6 +14,8 @@ This Zotero plugin addresses the pain when you store papers from arXiv and want 
 
 > [!Warning]
 > This plugin is in alpha stage and only suports Zotero 7!
+>
+> I strongly recommend you to check the results manually after operations.
 
 ## ✨ Features
 
@@ -85,26 +87,85 @@ PDF attachment b*
 
 Download `zotero-arxiv-workflow.xpi` from the [release page](https://github.com/AllanChain/zotero-arxiv-workflow/releases). Firefox users need to right-click on the link and use "Save link as" instead of direct downloading it. After downloading, click "Tools" > "Plugins" in Zotero menu and drag the downloaded file into the dialog.
 
-## 🎈 How to Use
+## 🎈 Explanation of each feature
 
 ### 🪢 Merge arXiv paper and the published one
 
-1. Save the arXiv version into Zotero
-2. Save the published version into Zotero
-3. Select both items, right click
-4. Select "Merge arXiv"
+The main logic of merging items is described [above](#-how). A few points to emphasis:
 
-This will update the arXiv item with all the information from the journal item except for the `URL` and `dateAdded`. The journal item will be deleted and the original arXiv item will have type `journalArticle`.
+- Select and only select two items: an arXiv paper and its published version.
+  - Do NOT select anything else, including any attachments of an item.
+- An item is considered published if it has type "Journal Article" or "Conference Paper".
+- The item for published version is deleted and the item for arXiv version will have updated info and attachments.
+- If the titles of these two items are different, a dialog will popup to ask user confirmation.
 
-This will also make the published PDF as the default PDF.
+<details>
+<summary>JavaScript API</summary>
+
+
+```typescript
+async Zotero.arXivWorkflow.merge(
+  preprintItem: Zotero.Item,
+  publishedItem: Zotero.Item,
+  suppressWarn = false,
+)
+```
+
+This function assumes that the first argument is an arXiv version and the second is the published one. Currently, no checks will be performed to ensure this. The function caller is responsible to make sure the `type` of items is correct.
+
+If `suppressWarn` is `true`, no confirmation dialog will popup if the title of two items are different.
+
+</details>
 
 ### 🗃️ Prefer to open a specific PDF
 
-If you have merged some entries manually, those entries will by default open the arXiv PDF. To make Zotero open the published PDF by default, you can select the published PDF, right click, and select "Prefer this PDF".
+Maybe you have merged some items manually before. Or maybe you just want to change the default PDF to open.
+Either case, you will find the "Prefer PDF" feature useful.
+To use this feature, select (and only select) the PDF you want to open by default, right click, and select "Prefer this PDF".
+
+<details>
+<summary>
+Under the hood, this plugin does something "dirty".
+</summary>
+
+
+That is because Zotero does not have the functionality of setting the default PDF to open.
+It determines the PDF to open by checking and sorting by:
+- The attachment is a PDF
+- The URL field of the PDF matches the URL of the parent item
+- `dateAdded` of the PDF
+Or in SQL:
+
+```sql
+ORDER BY contentType='application/pdf' DESC, url=? DESC, dateAdded ASC
+```
+
+Therefore, to make Zotero perfer a specific PDF, this plugin
+1. sets URL field of the PDF attachment the same as that of parent item
+2. sets the `dateAdded` field to be the oldest among all PDFs of parent item
+</details>
+
+<details>
+<summary>JavaScript API</summary>
+
+
+```typescript
+async Zotero.arXivWorkflow.preferPDF(
+  selectedAttachment: Zotero.Item
+)
+```
+
+This function assumes that the argument is a PDF attachment. Currently, no checks will be performed to ensure this. The function caller is responsible to perform the checks.
+
+</details>
 
 ### 📄 Search for updated version of an arXiv paper
 
-If you have a preprint item for the arXiv paper, and you want to find if it has been published on journals or updated on arXiv, and then update the information, you can right click on the preprint item and select "Update arXiv paper". This will search `arxiv.org` for the "Related DOI" field, which may be updated if the paper got published. If nothing is found, we will fall back to the [Semantic Scholar](https://www.semanticscholar.org) API.
+If you have a preprint item for the arXiv paper, and you want to find if it has been published on journals or updated on arXiv, and then update the information, you can right click on the preprint item and select "Update arXiv paper". This will search:
+1. Published versions by trying:
+  1. [arXiv](https://arxiv.org) for the "Related DOI" field, which may be updated if the paper got published
+  2. [Semantic Scholar](https://www.semanticscholar.org) API
+2. If no published version found, the plugin will search [arXiv](https://arxiv.org) for updated versions
 
 > [!Note]
 >
@@ -112,9 +173,39 @@ If you have a preprint item for the arXiv paper, and you want to find if it has 
 
 If a published version is found, a new item will be created automatically and the published PDF will be downloaded. Then the preprint item and the newly created journal item will be merged with the same logic as mentioned earlier.
 
-### 🌐 Download published PDF
+<details>
+<summary>JavaScript API</summary>
 
-Say you have an arXiv paper PDF and import it into Zotero. Zotero finds that it has been published and uses the information from the published version. A few days later you might want to download the published version because it might be different from the arXiv one. With original Zotero, you have to open the journal URL, download the PDF, and add it as an attachment. With this plugin, it is as easy as right click and select "Download published PDF".
+
+```typescript
+async Zotero.arXivWorkflow.arXivUpdate(
+  preprintItem: Zotero.Item
+)
+```
+
+This function assumes that the argument is an arXiv item, and no checks will be performed to ensure this. The function caller is responsible to perform the checks.
+
+</details>
+
+### 🌐 Download latest PDF
+
+Say you have an arXiv paper PDF and import it into Zotero. Zotero finds that it has been published and uses the information from the published version. A few days later you might want to download the published version because it might be different from the arXiv one. With original Zotero, you have to open the journal URL, download the PDF, and add it as an attachment. With this plugin, it is as easy as right click and select "Download latest PDF".
+
+<details>
+<summary>JavaScript API</summary>
+
+
+```typescript
+async Zotero.arXivWorkflow.updatePDF(
+  journalItem: Zotero.Item
+)
+```
+
+This function assumes that the argument is an journal item, and no checks will be performed to ensure this. The function caller is responsible to perform the checks.
+
+Under the hood, this just calls `Zotero.Attachments.addAvailablePDF`.
+
+</details>
 
 ## 💻 Development
 
