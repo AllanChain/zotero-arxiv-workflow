@@ -163,8 +163,8 @@ This function assumes that the argument is a PDF attachment. Currently, no check
 
 If you have a preprint item for the arXiv paper, and you want to find if it has been published on journals or updated on arXiv, and then update the information, you can right click on the preprint item and select "Update arXiv paper". This will search:
 1. Published versions by trying:
-  1. [arXiv](https://arxiv.org) for the "Related DOI" field, which may be updated if the paper got published
-  2. [Semantic Scholar](https://www.semanticscholar.org) API
+    1. [arXiv](https://arxiv.org) for the "Related DOI" field, which may be updated if the paper got published
+    2. [Semantic Scholar](https://www.semanticscholar.org) API
 2. If no published version found, the plugin will search [arXiv](https://arxiv.org) for updated versions
 
 > [!Note]
