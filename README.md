@@ -192,7 +192,7 @@ This function assumes that the argument is an arXiv item, and no checks will be 
 
 ### 🌐 Download latest PDF
 
-> [!INFO]
+> [!Tip]
 >
 > This feature requires journal subscription.
 
