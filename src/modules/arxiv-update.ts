@@ -4,14 +4,28 @@ import { getPref } from "../utils/prefs";
 import { arXivMerge } from "./arxiv-merge";
 import { catchError } from "./error";
 
+interface PaperIdentifier {
+  doi?: string;
+  url?: string;
+}
+
 async function createItemByZotero(
-  doi: string,
+  paper: PaperIdentifier,
   collections: number[],
 ): Promise<Zotero.Item | false> {
-  const translate = new Zotero.Translate.Search();
-  translate.setIdentifier({ DOI: doi });
-  const translators = await translate.getTranslators();
-  translate.setTranslator(translators);
+  let translate;
+  if (paper.doi) {
+    translate = new Zotero.Translate.Search();
+    translate.setIdentifier({ DOI: paper.doi });
+    const translators = await translate.getTranslators();
+    translate.setTranslator(translators);
+  } else if (paper.url) {
+    translate = new Zotero.Translate.Web();
+    const doc = await Zotero.HTTP.processDocuments(paper.url, (doc) => doc);
+    translate.setDocument(doc[0]);
+    const translators = await translate.getTranslators();
+    translate.setTranslator(translators);
+  }
   const libraryID = ZoteroPane.getSelectedLibraryID();
   const items = await translate.translate({
     libraryID,
@@ -52,6 +66,7 @@ export class arXivUpdate {
   static async update(preprintItem: Zotero.Item) {
     const tr = (branch: string) => getString("update-prompt", branch);
     const arXivURL = preprintItem.getField("url");
+    const title = preprintItem.getDisplayTitle();
     const popupWin = new ztoolkit.ProgressWindow(getString("update-prompt"));
     popupWin.createLine({
       icon: arXivUpdate.menuIcon,
@@ -63,8 +78,8 @@ export class arXivUpdate {
       popupWin.changeLine({ text: tr(msg), progress: 100 }).show(1000);
     };
     try {
-      const doi = await arXivUpdate.findPublishedDOI(arXivURL);
-      if (doi === undefined) {
+      const paper = await new PaperFinder(arXivURL, title).find();
+      if (paper === undefined) {
         // Find new arXiv version instead
         popupWin.changeLine({ text: tr("find-arxiv"), progress: 30 });
         popupWin.show(-1);
@@ -92,7 +107,7 @@ export class arXivUpdate {
       if (collection) {
         collections = [collection.id];
       }
-      const journalItem = await createItemByZotero(doi, collections);
+      const journalItem = await createItemByZotero(paper, collections);
       if (!journalItem) return showError("download-fail");
       journalItem.saveTx();
 
@@ -163,5 +178,69 @@ export class arXivUpdate {
     if (!match) return false;
     const onlineVersion = parseInt(match[1], 10);
     return onlineVersion > localVersion ? onlineVersion : false;
+  }
+}
+
+class PaperFinder {
+  arXivID: string;
+  arXivURL: string;
+  title: string;
+
+  constructor(arXivURL: string, title: string) {
+    this.title = title;
+    this.arXivURL = arXivURL;
+    const idMatch = arXivURL.match(/\/(?<arxiv>[^/]+)$/);
+    if (idMatch?.groups?.arxiv === undefined) {
+      throw `${arXivURL} is not a valid arXivURL`;
+    }
+    this.arXivID = idMatch.groups.arxiv;
+  }
+
+  async find(): Promise<PaperIdentifier | undefined> {
+    const finders = [
+      this.arXivPage.bind(this),
+      this.semanticScholar.bind(this),
+      this.dblp.bind(this),
+    ];
+    for (const finder of finders) {
+      const result = await finder().catch(ztoolkit.log);
+      if (result) return result;
+    }
+  }
+
+  async arXivPage(): Promise<PaperIdentifier | undefined> {
+    const htmlResp = await fetch(this.arXivURL);
+    const htmlContent = await htmlResp.text();
+    const doiMatch = htmlContent.match(/data-doi="(?<doi>.*?)"/);
+    const doi = doiMatch?.groups?.doi;
+    return doi ? { doi } : undefined;
+  }
+
+  async semanticScholar(): Promise<PaperIdentifier | undefined> {
+    const semanticAPI = "https://api.semanticscholar.org/graph/v1/paper";
+    const semanticURL = `${semanticAPI}/ARXIV:${this.arXivID}?fields=externalIds`;
+    const jsonResp = await fetch(semanticURL);
+    const semanticJSON = (await jsonResp.json()) as any;
+    const doi = semanticJSON.externalIds?.DOI as string | undefined;
+    // Retrun undefined if the DOI is an arXiv DOI
+    return !doi || doi.toLowerCase()?.includes("arxiv") ? undefined : { doi };
+  }
+
+  async dblp(): Promise<PaperIdentifier | undefined> {
+    const dblpAPI = "https://dblp.org/search/publ/api";
+    const dblpURL = `${dblpAPI}?q=${encodeURIComponent(this.title)}&format=json`;
+    const jsonResp = await fetch(dblpURL);
+    const json = (await jsonResp.json()) as any;
+    const info = json?.result?.hits?.hit?.[0]?.info;
+    // Remove final `.` in title (idk why dblp has this)
+    const title = info?.title?.replace(/\.$/, "");
+    // Require exact title match
+    if (this.title !== title) {
+      ztoolkit.log(
+        `DBLP title mismatch: expected "${this.title}", got "${title}"`,
+      );
+      return;
+    }
+    return info?.url ? { url: info?.url } : undefined;
   }
 }
