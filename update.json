@@ -3,7 +3,7 @@
     "arxiv@allanchain.github.com": {
       "updates": [
         {
-          "version": "0.2.3",
+          "version": "0.2.4",
           "update_link": "https://github.com/AllanChain/zotero-arxiv-workflow/releases/latest/download/zotero-arxiv-workflow.xpi",
           "applications": {
             "zotero": {
