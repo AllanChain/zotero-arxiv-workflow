@@ -218,6 +218,7 @@ class PaperFinder {
       );
       return;
     }
-    return info?.url ? { url: info?.url } : undefined;
+    // Ignore this DBLP entry if it belongs to CoRR. See also #14
+    return !info?.url || info.venue === "CoRR" ? undefined : { url: info?.url };
   }
 }
