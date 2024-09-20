@@ -78,7 +78,8 @@ export class arXivUpdate {
       popupWin.changeLine({ text: tr(msg), progress: 100 }).show(1000);
     };
     try {
-      const paper = await new PaperFinder(arXivURL, title).find();
+      let paper = await new PaperFinder(arXivURL, title).find();
+      let pdfTitle = "Published PDF";
       if (paper === undefined) {
         // Find new arXiv version instead
         popupWin.changeLine({ text: tr("find-arxiv"), progress: 30 });
@@ -87,17 +88,8 @@ export class arXivUpdate {
           await arXivUpdate.arXivHasNewVersion(preprintItem);
         if (onlineVersion === undefined) return showError("unknown-version");
         if (onlineVersion === false) return showError("uptodate");
-        popupWin.changeLine({ text: tr("download-pdf"), progress: 60 });
-        const attachment = await Zotero.Attachments.addPDFFromURLs(
-          preprintItem,
-          Zotero.Attachments.getPDFResolvers(preprintItem, ["url"]),
-        );
-        if (!attachment) return showError("download-fail");
-        attachment.setField("title", `v${onlineVersion} PDF`);
-        attachment.saveTx();
-        popupWin.changeLine({ text: tr("updated"), progress: 100 });
-        popupWin.show(1000);
-        return;
+        paper = { url: arXivURL };
+        pdfTitle = `v${onlineVersion} PDF`;
       }
       // Download published version
       popupWin.changeLine({ text: tr("download-paper"), progress: 30 });
@@ -117,10 +109,19 @@ export class arXivUpdate {
       ) {
         popupWin.changeLine({ text: tr("download-pdf"), progress: 60 });
         popupWin.show(-1);
-        await Zotero.Attachments.addAvailablePDF(journalItem, {
-          // @ts-ignore zotero-type mistake
-          methods: ["doi"], // Only download from publisher
-        });
+        const attachment = await Zotero.Attachments.addAvailablePDF(
+          journalItem,
+          {
+            // @ts-ignore zotero-type mistake
+            methods: ["doi"], // Only download from publisher
+          },
+        );
+        if (attachment) {
+          attachment.setField("title", pdfTitle);
+          attachment.saveTx();
+        } else {
+          showError("download-fail");
+        }
       }
       await arXivMerge.merge(preprintItem, journalItem, true);
 
