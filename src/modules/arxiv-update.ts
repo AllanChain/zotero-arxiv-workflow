@@ -131,30 +131,6 @@ export class arXivUpdate {
     }
   }
 
-  static async findPublishedDOI(arXivURL: string): Promise<string | undefined> {
-    try {
-      const htmlResp = await fetch(arXivURL);
-      const htmlContent = await htmlResp.text();
-      const doiMatch = htmlContent.match(/data-doi="(?<doi>.*?)"/);
-      if (doiMatch?.groups?.doi) return doiMatch.groups.doi;
-    } catch (err) {
-      ztoolkit.log(err);
-    }
-    const idMatch = arXivURL.match(/\/(?<arxiv>[^/]+)$/);
-    if (idMatch?.groups?.arxiv === undefined) return;
-    const arXivID = idMatch.groups.arxiv;
-    const semanticAPI = "https://api.semanticscholar.org/graph/v1/paper";
-    const semanticURL = `${semanticAPI}/ARXIV:${arXivID}?fields=externalIds`;
-    try {
-      const jsonResp = await fetch(semanticURL);
-      const semanticJSON = (await jsonResp.json()) as any;
-      const doi = semanticJSON.externalIds?.DOI as string | undefined;
-      return doi?.toLowerCase()?.includes("arxiv") ? undefined : doi;
-    } catch (err) {
-      ztoolkit.log(err);
-    }
-  }
-
   static async arXivHasNewVersion(
     preprintItem: Zotero.Item,
   ): Promise<undefined | false | number> {
