@@ -81,6 +81,7 @@ export class arXivUpdate {
       let paper = await new PaperFinder(arXivURL, title).find();
       let pdfTitle = "Published PDF";
       if (paper === undefined) {
+        if (!getPref("updateSource.arXiv")) return showError("uptodate");
         // Find new arXiv version instead
         popupWin.changeLine({ text: tr("find-arxiv"), progress: 30 });
         popupWin.show(-1);
@@ -175,11 +176,13 @@ class PaperFinder {
 
   async find(): Promise<PaperIdentifier | undefined> {
     const finders = [
-      this.arXivPage.bind(this),
-      this.semanticScholar.bind(this),
-      this.dblp.bind(this),
+      getPref("updateSource.doi") && this.arXivPage.bind(this),
+      getPref("updateSource.semanticScholar") &&
+        this.semanticScholar.bind(this),
+      getPref("updateSource.dblp") && this.dblp.bind(this),
     ];
     for (const finder of finders) {
+      if (!finder) continue;
       const result = await finder().catch(ztoolkit.log);
       if (result) return result;
     }
