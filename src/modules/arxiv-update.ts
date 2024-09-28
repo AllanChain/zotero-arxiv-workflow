@@ -7,6 +7,7 @@ import { catchError } from "./error";
 interface PaperIdentifier {
   doi?: string;
   url?: string;
+  title: string;
 }
 
 async function createItemByZotero(
@@ -65,8 +66,6 @@ export class arXivUpdate {
 
   static async update(preprintItem: Zotero.Item) {
     const tr = (branch: string) => getString("update-prompt", branch);
-    const arXivURL = preprintItem.getField("url");
-    const title = preprintItem.getDisplayTitle();
     const popupWin = new ztoolkit.ProgressWindow(getString("update-prompt"));
     popupWin.createLine({
       icon: arXivUpdate.menuIcon,
@@ -78,20 +77,8 @@ export class arXivUpdate {
       popupWin.changeLine({ text: tr(msg), progress: 100 }).show(1000);
     };
     try {
-      let paper = await new PaperFinder(arXivURL, title).find();
-      let pdfTitle = "Published PDF";
-      if (paper === undefined) {
-        if (!getPref("updateSource.arXiv")) return showError("uptodate");
-        // Find new arXiv version instead
-        popupWin.changeLine({ text: tr("find-arxiv"), progress: 30 });
-        popupWin.show(-1);
-        const onlineVersion =
-          await arXivUpdate.arXivHasNewVersion(preprintItem);
-        if (onlineVersion === undefined) return showError("unknown-version");
-        if (onlineVersion === false) return showError("uptodate");
-        paper = { url: arXivURL };
-        pdfTitle = `v${onlineVersion} PDF`;
-      }
+      const paper = await new PaperFinder(preprintItem).find();
+      if (paper === undefined) return showError("uptodate");
       // Download published version
       popupWin.changeLine({ text: tr("download-paper"), progress: 30 });
       popupWin.show(-1);
@@ -118,7 +105,7 @@ export class arXivUpdate {
           },
         );
         if (attachment) {
-          attachment.setField("title", pdfTitle);
+          attachment.setField("title", paper.title);
           attachment.saveTx();
         } else {
           showError("download-fail");
@@ -132,54 +119,32 @@ export class arXivUpdate {
       return showError("error");
     }
   }
-
-  static async arXivHasNewVersion(
-    preprintItem: Zotero.Item,
-  ): Promise<undefined | false | number> {
-    let localVersion = 0;
-    for (const attachmentID of preprintItem.getAttachments()) {
-      const attachment = await Zotero.Items.getAsync(attachmentID);
-      if (!attachment.isPDFAttachment()) continue;
-      const fullText = await Zotero.PDFWorker.getFullText(attachmentID, 1);
-      const match = fullText.text.match(/arXiv:[\d.]+v(\d+)/);
-      if (!match) continue;
-      const currentPDFVersion = parseInt(match[1], 10);
-      if (currentPDFVersion > localVersion) {
-        localVersion = currentPDFVersion;
-      }
-    }
-    ztoolkit.log(`Current arXiv version: ${localVersion}`);
-    if (localVersion === 0) return undefined;
-    const htmlResp = await fetch(preprintItem.getField("url"));
-    const htmlContent = await htmlResp.text();
-    const match = htmlContent.match(/<strong>\[v(\d+)\]<\/strong>/);
-    if (!match) return false;
-    const onlineVersion = parseInt(match[1], 10);
-    return onlineVersion > localVersion ? onlineVersion : false;
-  }
 }
 
 class PaperFinder {
   arXivID: string;
   arXivURL: string;
   title: string;
+  item: Zotero.Item;
 
-  constructor(arXivURL: string, title: string) {
-    this.title = title;
-    this.arXivURL = arXivURL;
-    const idMatch = arXivURL.match(/\/(?<arxiv>[^/]+)$/);
+  constructor(preprintItem: Zotero.Item) {
+    this.item = preprintItem;
+    this.arXivURL = preprintItem.getField("url");
+    this.title = preprintItem.getDisplayTitle();
+    const idMatch = this.arXivURL.match(/\/(?<arxiv>[^/]+)$/);
     if (idMatch?.groups?.arxiv === undefined) {
-      throw `${arXivURL} is not a valid arXivURL`;
+      throw `${this.arXivURL} is not a valid arXivURL`;
     }
     this.arXivID = idMatch.groups.arxiv;
   }
 
   async find(): Promise<PaperIdentifier | undefined> {
     const finders = [
-      getPref("updateSource.doi") && this.arXivPage.bind(this),
+      getPref("updateSource.doi") && this.relatedDOI.bind(this),
       getPref("updateSource.semanticScholar") &&
         this.semanticScholar.bind(this),
       getPref("updateSource.dblp") && this.dblp.bind(this),
+      getPref("updateSource.arXiv") && this.arXivPDF.bind(this),
     ];
     for (const finder of finders) {
       if (!finder) continue;
@@ -188,12 +153,12 @@ class PaperFinder {
     }
   }
 
-  async arXivPage(): Promise<PaperIdentifier | undefined> {
+  async relatedDOI(): Promise<PaperIdentifier | undefined> {
     const htmlResp = await fetch(this.arXivURL);
     const htmlContent = await htmlResp.text();
     const doiMatch = htmlContent.match(/data-doi="(?<doi>.*?)"/);
     const doi = doiMatch?.groups?.doi;
-    return doi ? { doi } : undefined;
+    return doi ? { doi, title: "Published PDF" } : undefined;
   }
 
   async semanticScholar(): Promise<PaperIdentifier | undefined> {
@@ -203,7 +168,9 @@ class PaperFinder {
     const semanticJSON = (await jsonResp.json()) as any;
     const doi = semanticJSON.externalIds?.DOI as string | undefined;
     // Retrun undefined if the DOI is an arXiv DOI
-    return !doi || doi.toLowerCase()?.includes("arxiv") ? undefined : { doi };
+    return !doi || doi.toLowerCase()?.includes("arxiv")
+      ? undefined
+      : { doi, title: "Published PDF" };
   }
 
   async dblp(): Promise<PaperIdentifier | undefined> {
@@ -222,6 +189,32 @@ class PaperFinder {
       return;
     }
     // Ignore this DBLP entry if it belongs to CoRR. See also #14
-    return !info?.url || info.venue === "CoRR" ? undefined : { url: info?.url };
+    return !info?.url || info.venue === "CoRR"
+      ? undefined
+      : { url: info?.url, title: "Published PDF" };
+  }
+
+  async arXivPDF(): Promise<PaperIdentifier | undefined> {
+    let localVersion = 0;
+    for (const attachmentID of this.item.getAttachments()) {
+      const attachment = await Zotero.Items.getAsync(attachmentID);
+      if (!attachment.isPDFAttachment()) continue;
+      const fullText = await Zotero.PDFWorker.getFullText(attachmentID, 1);
+      const match = fullText.text.match(/arXiv:[\d.]+v(\d+)/);
+      if (!match) continue;
+      const currentPDFVersion = parseInt(match[1], 10);
+      if (currentPDFVersion > localVersion) {
+        localVersion = currentPDFVersion;
+      }
+    }
+    ztoolkit.log(`Current arXiv version: ${localVersion}`);
+    if (localVersion === 0) return undefined;
+    const htmlResp = await fetch(this.item.getField("url"));
+    const htmlContent = await htmlResp.text();
+    const match = htmlContent.match(/<strong>\[v(\d+)\]<\/strong>/);
+    if (!match) return undefined;
+    const onlineVersion = parseInt(match[1], 10);
+    if (onlineVersion <= localVersion) return undefined;
+    return { url: this.arXivURL, title: `v${onlineVersion} PDF` };
   }
 }
