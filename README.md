@@ -168,6 +168,7 @@ If you have a preprint item for the arXiv paper, and you want to find if it has 
 1. Published versions by trying:
    1. [arXiv](https://arxiv.org) for the "Related DOI" field, which may be updated if the paper got published
    2. [Semantic Scholar](https://www.semanticscholar.org) API
+   3. [DBLP](https://dblp.org) API
 2. If no published version found, the plugin will search [arXiv](https://arxiv.org) for updated versions
 
 > [!Note]
