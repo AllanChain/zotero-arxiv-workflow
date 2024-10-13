@@ -34,14 +34,13 @@ jobs:
       - name: Build
         run: |
           npm run build
-          mv build/*.xpi build/arXiv-workflow-for-zotero.xpi
 
       - name: Create artifact
         if: startsWith(github.ref, 'refs/heads/')
         uses: actions/upload-artifact@v4
         with:
           name: arXiv-workflow-for-zotero
-          path: build/arXiv-workflow-for-zotero.xpi
+          path: build/zotero-arxiv-workflow.xpi
 
       - name: Release to GitHub
         if: startsWith(github.ref, 'refs/tags/')
