@@ -15,24 +15,19 @@ async function onStartup() {
     Zotero.uiReadyPromise,
   ]);
 
-  // TODO: Remove this after zotero#3387 is merged
-  if (__env__ === "development") {
-    // Keep in sync with the scripts/startup.mjs
-    const loadDevToolWhen = `Plugin ${config.addonID} startup`;
-    ztoolkit.log(loadDevToolWhen);
-  }
-
   initLocale();
 
-  await onMainWindowLoad(window);
+  await Promise.all(
+    Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
+  );
 }
 
 async function onMainWindowLoad(win: Window): Promise<void> {
   // Create ztoolkit for every window
   addon.data.ztoolkit = createZToolkit();
 
-  // @ts-ignore comes with the template
-  window.MozXULElement.insertFTLIfNeeded(`${config.addonRef}-mainWindow.ftl`);
+  // @ts-ignore This is a moz feature
+  win.MozXULElement.insertFTLIfNeeded(`${config.addonRef}-mainWindow.ftl`);
 
   Preferences.registerPreferences();
   if (getPref("features.arXivMerge")) arXivMerge.registerRightClickMenuItem();

@@ -1,4 +1,4 @@
-import ZoteroToolkit from "zotero-plugin-toolkit";
+import { ZoteroToolkit } from "zotero-plugin-toolkit";
 import { config } from "../../package.json";
 
 export { createZToolkit };
@@ -29,18 +29,15 @@ function initZToolkit(_ztoolkit: ReturnType<typeof createZToolkit>) {
   );
 }
 
-import { BasicTool, unregister } from "zotero-plugin-toolkit/dist/basic";
-import { UITool } from "zotero-plugin-toolkit/dist/tools/ui";
-import { PreferencePaneManager } from "zotero-plugin-toolkit/dist/managers/preferencePane";
+import { BasicTool, unregister } from "zotero-plugin-toolkit";
+import { UITool } from "zotero-plugin-toolkit";
 
 class MyToolkit extends BasicTool {
   UI: UITool;
-  PreferencePane: PreferencePaneManager;
 
   constructor() {
     super();
     this.UI = new UITool(this);
-    this.PreferencePane = new PreferencePaneManager(this);
   }
 
   unregisterAll() {

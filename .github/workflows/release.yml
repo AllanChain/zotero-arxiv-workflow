@@ -27,11 +27,15 @@ jobs:
           node-version: 20
 
       - name: Install deps
-        run: npm install
+        run: npm install -f
+
+      - name: Build
+        run: |
+          npm run build
 
       - name: Release to GitHub
         run: |
-          npm run release -- --no-increment --no-git --github.release --ci --VV
+          npm run release
           sleep 1s
 
       - name: Notify release

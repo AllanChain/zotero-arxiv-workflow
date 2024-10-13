@@ -11,13 +11,13 @@ export class PreferPDF {
       id: "zotero-arxiv-workflow-prefer",
       label: getString("menuitem-prefer"),
       getVisibility: () => {
-        const items = ZoteroPane.getSelectedItems();
+        const items = Zotero.getActiveZoteroPane().getSelectedItems();
         if (items.length !== 1) return false;
         if (!items[0].isPDFAttachment()) return false;
         return true;
       },
       commandListener: async (ev) => {
-        const selectedAttachment = ZoteroPane.getSelectedItems()[0];
+        const selectedAttachment = Zotero.getActiveZoteroPane().getSelectedItems()[0];
         PreferPDF.prefer(selectedAttachment);
       },
       icon: menuIcon,

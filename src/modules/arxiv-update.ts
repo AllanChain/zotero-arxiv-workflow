@@ -27,7 +27,7 @@ async function createItemByZotero(
     const translators = await translate.getTranslators();
     translate.setTranslator(translators);
   }
-  const libraryID = ZoteroPane.getSelectedLibraryID();
+  const libraryID = Zotero.getActiveZoteroPane().getSelectedLibraryID();
   const items = await translate.translate({
     libraryID,
     collections,
@@ -49,7 +49,7 @@ export class arXivUpdate {
       label: getString("menuitem-update"),
       icon: arXivUpdate.menuIcon,
       getVisibility: () => {
-        const items = ZoteroPane.getSelectedItems();
+        const items = Zotero.getActiveZoteroPane().getSelectedItems();
         if (items.length !== 1) return false;
         const preprintItem = items[0];
         if (preprintItem.itemType !== "preprint") return false;
@@ -58,7 +58,7 @@ export class arXivUpdate {
         return true;
       },
       commandListener: async (ev) => {
-        const preprintItem = ZoteroPane.getSelectedItems()[0];
+        const preprintItem = Zotero.getActiveZoteroPane().getSelectedItems()[0];
         arXivUpdate.update(preprintItem);
       },
     });
@@ -82,7 +82,7 @@ export class arXivUpdate {
       // Download published version
       popupWin.changeLine({ text: tr("download-paper"), progress: 30 });
       popupWin.show(-1);
-      const collection = ZoteroPane.getSelectedCollection();
+      const collection = Zotero.getActiveZoteroPane().getSelectedCollection();
       let collections: number[] = [];
       if (collection) {
         collections = [collection.id];

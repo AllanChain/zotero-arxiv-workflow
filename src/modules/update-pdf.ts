@@ -14,14 +14,14 @@ export class UpdatePDF {
       label: getString("menuitem-update-pdf"),
       icon: UpdatePDF.menuIcon,
       getVisibility: () => {
-        const items = ZoteroPane.getSelectedItems();
+        const items = Zotero.getActiveZoteroPane().getSelectedItems();
         if (items.length !== 1) return false;
         const publishedItem = items[0];
         if (publishedItem.itemType !== "journalArticle") return false;
         return true;
       },
       commandListener: async (ev) => {
-        const journalItem = ZoteroPane.getSelectedItems()[0];
+        const journalItem = Zotero.getActiveZoteroPane().getSelectedItems()[0];
         UpdatePDF.update(journalItem);
       },
     });

@@ -16,7 +16,7 @@ export class arXivMerge {
       label: getString("menuitem-merge"),
       icon: menuIcon,
       getVisibility: () => {
-        const items = ZoteroPane.getSelectedItems();
+        const items = Zotero.getActiveZoteroPane().getSelectedItems();
         if (items.length !== 2) return false;
         const { preprintItem, publishedItem } = arXivMerge.identifyItems(items);
         if (preprintItem === undefined || publishedItem === undefined)
@@ -24,7 +24,7 @@ export class arXivMerge {
         return true;
       },
       commandListener: async (ev) => {
-        const items = ZoteroPane.getSelectedItems();
+        const items = Zotero.getActiveZoteroPane().getSelectedItems();
         if (items.length !== 2) {
           // @ts-expect-error null is also a valid argument
           Zotero.alert(null, "Impossible", "Only supports merging 2 items.");
@@ -66,7 +66,7 @@ export class arXivMerge {
       if (
         !Services.prompt.confirm(
           // @ts-expect-error window is also a valid argument
-          window,
+          Zotero.getMainWindow(),
           getString("merge-confirm"),
           confirmMsg,
         )
