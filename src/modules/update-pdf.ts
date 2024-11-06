@@ -37,9 +37,9 @@ export class UpdatePDF {
       progress: 0,
     });
     popupWin.show(-1);
-    const attachmentItem = await Zotero.Attachments.addAvailablePDF(
+    // @ts-ignore zotero-type mistake
+    const attachmentItem = await Zotero.Attachments.addAvailableFile(
       journalItem,
-      // @ts-ignore zotero-type mistake
       { methods: ["doi"] }, // Only download from publisher
     );
     if (attachmentItem) {

@@ -97,10 +97,10 @@ export class arXivUpdate {
       ) {
         popupWin.changeLine({ text: tr("download-pdf"), progress: 60 });
         popupWin.show(-1);
-        const attachment = await Zotero.Attachments.addAvailablePDF(
+        // @ts-ignore zotero-type mistake
+        const attachment = await Zotero.Attachments.addAvailableFile(
           journalItem,
           {
-            // @ts-ignore zotero-type mistake
             methods: ["doi"], // Only download from publisher
           },
         );

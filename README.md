@@ -210,7 +210,7 @@ async Zotero.arXivWorkflow.updatePDF(
 
 This function assumes that the argument is an journal item, and no checks will be performed to ensure this. The function caller is responsible to perform the checks.
 
-Under the hood, this just calls `Zotero.Attachments.addAvailablePDF` and limits the download source to DOI only.
+Under the hood, this just calls `Zotero.Attachments.addAvailableFile` and limits the download source to DOI only.
 
 </details>
 
