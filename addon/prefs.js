@@ -8,4 +8,5 @@ pref("__prefsPrefix__.features.updatePDF", true);
 pref("__prefsPrefix__.updateSource.doi", true);
 pref("__prefsPrefix__.updateSource.semanticScholar", true);
 pref("__prefsPrefix__.updateSource.dblp", true);
+pref("__prefsPrefix__.updateSource.pubmed", true);
 pref("__prefsPrefix__.updateSource.arXiv", true);

@@ -4,6 +4,13 @@ import { getPref } from "../utils/prefs";
 import { arXivMerge } from "./arxiv-merge";
 import { catchError } from "./error";
 
+const KNOWN_PREPRINT_SERVERS = {
+  arxiv: "arxiv.org",
+  biorxiv: "www.biorxiv.org",
+  medrxiv: "www.medrxiv.org",
+  psyarxiv: "osf.io",
+};
+
 interface PaperIdentifier {
   doi?: string;
   url?: string;
@@ -54,8 +61,8 @@ export class arXivUpdate {
         const preprintItem = items[0];
         if (preprintItem.itemType !== "preprint") return false;
         const arXivURL = preprintItem.getField("url");
-        if (!arXivURL.includes("arxiv")) return false;
-        return true;
+        const urlHost = new URL(arXivURL).hostname;
+        return Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost);
       },
       commandListener: async (ev) => {
         const preprintItem = Zotero.getActiveZoteroPane().getSelectedItems()[0];
@@ -122,20 +129,18 @@ export class arXivUpdate {
 }
 
 class PaperFinder {
-  arXivID: string;
-  arXivURL: string;
+  preprintURL: string;
   title: string;
   item: Zotero.Item;
 
   constructor(preprintItem: Zotero.Item) {
     this.item = preprintItem;
-    this.arXivURL = preprintItem.getField("url");
+    this.preprintURL = preprintItem.getField("url");
     this.title = preprintItem.getDisplayTitle();
-    const idMatch = this.arXivURL.match(/\/(?<arxiv>[^/]+)$/);
-    if (idMatch?.groups?.arxiv === undefined) {
-      throw `${this.arXivURL} is not a valid arXivURL`;
+    const urlHost = new URL(this.preprintURL).hostname;
+    if (!Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost)) {
+      throw `${this.preprintURL} is not a valid preprint server URL`;
     }
-    this.arXivID = idMatch.groups.arxiv;
   }
 
   async find(): Promise<PaperIdentifier | undefined> {
@@ -144,6 +149,7 @@ class PaperFinder {
       getPref("updateSource.semanticScholar") &&
         this.semanticScholar.bind(this),
       getPref("updateSource.dblp") && this.dblp.bind(this),
+      getPref("updateSource.pubmed") && this.pubMed.bind(this),
       getPref("updateSource.arXiv") && this.arXivPDF.bind(this),
     ];
     for (const finder of finders) {
@@ -154,16 +160,41 @@ class PaperFinder {
   }
 
   async relatedDOI(): Promise<PaperIdentifier | undefined> {
-    const htmlResp = await fetch(this.arXivURL);
-    const htmlContent = await htmlResp.text();
-    const doiMatch = htmlContent.match(/data-doi="(?<doi>.*?)"/);
-    const doi = doiMatch?.groups?.doi;
-    return doi ? { doi, title: "Published PDF" } : undefined;
+    const urlHost = new URL(this.preprintURL).hostname;
+    if (urlHost === KNOWN_PREPRINT_SERVERS.arxiv) {
+      const htmlResp = await fetch(this.preprintURL);
+      const htmlContent = await htmlResp.text();
+      const doiMatch = htmlContent.match(/data-doi="(?<doi>.*?)"/);
+      const doi = doiMatch?.groups?.doi;
+      return doi ? { doi, title: "Published PDF" } : undefined;
+    } else if (
+      urlHost === KNOWN_PREPRINT_SERVERS.biorxiv ||
+      urlHost === KNOWN_PREPRINT_SERVERS.medrxiv
+    ) {
+      const arxivID = this.preprintURL.match(/\/(?<arxivID>[\d./]+)v\d+$/)
+        ?.groups?.arxivID;
+      const apiURL =
+        urlHost === KNOWN_PREPRINT_SERVERS.biorxiv
+          ? `https://api.biorxiv.org/details/biorxiv/${arxivID}`
+          : `https://api.medrxiv.org/details/medrxiv/${arxivID}`;
+      const jsonResp = await fetch(apiURL);
+      const json = (await jsonResp.json()) as any;
+      const doi = json.collection?.[0]?.published as string | undefined;
+      return doi ? { doi, title: "Published PDF" } : undefined;
+    } else {
+      return undefined;
+    }
   }
 
   async semanticScholar(): Promise<PaperIdentifier | undefined> {
+    // Currently, only searching arXiv paper on semanticScholar is supported
+    const idMatch = this.preprintURL.match(/\/(?<arxiv>[^/]+)$/);
+    if (idMatch?.groups?.arxiv === undefined) {
+      return undefined;
+    }
+    const arXivID = idMatch.groups.arxiv;
     const semanticAPI = "https://api.semanticscholar.org/graph/v1/paper";
-    const semanticURL = `${semanticAPI}/ARXIV:${this.arXivID}?fields=externalIds`;
+    const semanticURL = `${semanticAPI}/ARXIV:${arXivID}?fields=externalIds`;
     const jsonResp = await fetch(semanticURL);
     const semanticJSON = (await jsonResp.json()) as any;
     const doi = semanticJSON.externalIds?.DOI as string | undefined;
@@ -194,6 +225,37 @@ class PaperFinder {
       : { url: info?.url, title: "Published PDF" };
   }
 
+  async pubMed(): Promise<PaperIdentifier | undefined> {
+    const pubMedSearchAPI =
+      "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed";
+    const pubMedSearchURL = `${pubMedSearchAPI}&term=${encodeURIComponent(this.title)}&retmode=json`;
+    const searchJsonResp = await fetch(pubMedSearchURL);
+    const searchJson = (await searchJsonResp.json()) as any;
+    const paperId = searchJson?.esearchresult?.idlist?.[0];
+    if (!paperId) return undefined;
+    const pubMedPaperAPI =
+      "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed";
+    const pubMedPaperURL = `${pubMedPaperAPI}&id=${paperId}&retmode=json`;
+    const paperJsonResp = await fetch(pubMedPaperURL);
+    const paperJson = (await paperJsonResp.json()) as any;
+    // Remove final `.` in title (idk why PubMed has this)
+    const info = paperJson?.result?.[paperId];
+    const title = info?.title?.replace(/\.$/, "");
+    // Require exact title match
+    if (this.title !== title) {
+      ztoolkit.log(
+        `PubMed title mismatch: expected "${this.title}", got "${title}"`,
+      );
+      return;
+    }
+    for (const idInfo of info?.articleids) {
+      if (idInfo.idtype === "doi") {
+        return { doi: idInfo.value, title: "Published PDF" };
+      }
+    }
+    return undefined;
+  }
+
   async arXivPDF(): Promise<PaperIdentifier | undefined> {
     let localVersion = 0;
     for (const attachmentID of this.item.getAttachments()) {
@@ -215,6 +277,6 @@ class PaperFinder {
     if (!match) return undefined;
     const onlineVersion = parseInt(match[1], 10);
     if (onlineVersion <= localVersion) return undefined;
-    return { url: this.arXivURL, title: `v${onlineVersion} PDF` };
+    return { url: this.preprintURL, title: `v${onlineVersion} PDF` };
   }
 }
