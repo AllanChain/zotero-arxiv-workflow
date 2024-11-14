@@ -17,7 +17,8 @@ export class PreferPDF {
         return true;
       },
       commandListener: async (ev) => {
-        const selectedAttachment = Zotero.getActiveZoteroPane().getSelectedItems()[0];
+        const selectedAttachment =
+          Zotero.getActiveZoteroPane().getSelectedItems()[0];
         PreferPDF.prefer(selectedAttachment);
       },
       icon: menuIcon,

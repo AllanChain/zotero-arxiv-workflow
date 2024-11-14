@@ -257,7 +257,9 @@ class PaperFinder {
       );
       return;
     }
-    for (const idInfo of info?.articleids) {
+    const idInfos = info?.articleids;
+    if (!idInfos) return undefined;
+    for (const idInfo of idInfos) {
       if (idInfo.idtype === "doi") {
         return { doi: idInfo.value, title: "Published PDF" };
       }
