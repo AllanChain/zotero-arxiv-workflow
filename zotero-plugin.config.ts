@@ -37,6 +37,10 @@ export default defineConfig({
     ],
   },
 
-  // If you need to see a more detailed log, uncomment the following line:
-  // logLevel: "trace",
+  release: {
+    bumpp: {
+      // @ts-ignore file is missing in typing
+      files: ["package.json"], // do not update package-lock.json
+    },
+  },
 });
