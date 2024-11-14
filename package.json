@@ -7,9 +7,7 @@
     "addonID": "arxiv@allanchain.github.com",
     "addonRef": "arxiv-workflow",
     "addonInstance": "arXivWorkflow",
-    "prefsPrefix": "extensions.zotero.arxiv-workflow",
-    "releasePage": "https://github.com/AllanChain/zotero-arxiv-workflow/releases",
-    "updateJSON": "https://raw.githubusercontent.com/AllanChain/zotero-arxiv-workflow/main/update.json"
+    "prefsPrefix": "extensions.zotero.arxiv-workflow"
   },
   "scripts": {
     "start": "zotero-plugin serve",
