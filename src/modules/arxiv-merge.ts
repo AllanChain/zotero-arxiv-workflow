@@ -4,7 +4,7 @@ import { catchError } from "./error";
 import { getPref } from "../utils/prefs";
 
 export class arXivMerge {
-  static reservedKeys = ["dateAdded", "dateModified", "extra"];
+  static reservedKeys = ["collections", "dateAdded", "dateModified", "extra"];
 
   @catchError
   static registerRightClickMenuItem() {
