@@ -188,6 +188,8 @@ class PaperFinder {
 
   async semanticScholar(): Promise<PaperIdentifier | undefined> {
     // Currently, only searching arXiv paper on semanticScholar is supported
+    const urlHost = new URL(this.preprintURL).hostname;
+    if (urlHost !== KNOWN_PREPRINT_SERVERS.arxiv) return undefined;
     const idMatch = this.preprintURL.match(/\/(?<arxiv>[^/]+)$/);
     if (idMatch?.groups?.arxiv === undefined) {
       return undefined;
@@ -205,6 +207,9 @@ class PaperFinder {
   }
 
   async dblp(): Promise<PaperIdentifier | undefined> {
+    // Well, CS guys won't use preprint servers other than arXiv
+    const urlHost = new URL(this.preprintURL).hostname;
+    if (urlHost !== KNOWN_PREPRINT_SERVERS.arxiv) return undefined;
     const dblpAPI = "https://dblp.org/search/publ/api";
     const dblpURL = `${dblpAPI}?q=${encodeURIComponent(this.title)}&format=json`;
     const jsonResp = await fetch(dblpURL);
@@ -215,7 +220,9 @@ class PaperFinder {
     // Require exact title match
     if (this.title !== title) {
       ztoolkit.log(
-        `DBLP title mismatch: expected "${this.title}", got "${title}"`,
+        title
+          ? `DBLP title mismatch: expected "${this.title}", got "${title}"`
+          : "Paper not found on DBLP",
       );
       return;
     }
@@ -244,7 +251,9 @@ class PaperFinder {
     // Require exact title match
     if (this.title !== title) {
       ztoolkit.log(
-        `PubMed title mismatch: expected "${this.title}", got "${title}"`,
+        title
+          ? `PubMed title mismatch: expected "${this.title}", got "${title}"`
+          : "Paper not found on PubMed",
       );
       return;
     }
@@ -257,6 +266,8 @@ class PaperFinder {
   }
 
   async arXivPDF(): Promise<PaperIdentifier | undefined> {
+    const urlHost = new URL(this.preprintURL).hostname;
+    if (urlHost !== KNOWN_PREPRINT_SERVERS.arxiv) return undefined;
     let localVersion = 0;
     for (const attachmentID of this.item.getAttachments()) {
       const attachment = await Zotero.Items.getAsync(attachmentID);
