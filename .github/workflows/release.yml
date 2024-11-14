@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   release:
+    name: ${{ startsWith(github.ref, 'refs/heads/') && 'Build' || 'Release' }}
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.GitHub_TOKEN }}
@@ -32,8 +33,7 @@ jobs:
         run: npm install -f
 
       - name: Build
-        run: |
-          npm run build
+        run: npm run build
 
       - name: Create artifact
         if: startsWith(github.ref, 'refs/heads/')
@@ -41,6 +41,10 @@ jobs:
         with:
           name: arXiv-workflow-for-zotero
           path: build/zotero-arxiv-workflow.xpi
+
+      - name: Lint code
+        if: startsWith(github.ref, 'refs/heads/')
+        run: npm run lint
 
       - name: Release to GitHub
         if: startsWith(github.ref, 'refs/tags/')
