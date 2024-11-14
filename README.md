@@ -7,7 +7,7 @@
   <a href="https://github.com/windingwind/zotero-plugin-template">
     <img src="https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?logo=github" alt="Using Zotero Plugin Template">
   </a>
-  <img src="https://img.shields.io/github/downloads/AllanChain/zotero-arxiv-workflow/total" alt="total downloads">
+  <img src="https://img.shields.io/github/downloads/AllanChain/zotero-arxiv-workflow/zotero-arxiv-workflow.xpi?logo=zotero&logoColor=%23CC2936" alt="total downloads">
 </p>
 
 This Zotero plugin addresses the pain when you store papers from arXiv and want to update your Zotero entry when they are published.
