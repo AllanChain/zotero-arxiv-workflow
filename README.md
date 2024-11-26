@@ -58,7 +58,7 @@ ItemID A (preprint)                         ItemID B
 --------------------                        --------------------
 Metadata A:                                 Metadata A:
 Date added (A)                              Date added (B)
-URL (A)                                     URL (A)
+URL (A)                                     URL (B)
 ...                                         ...
 --------------------               \        --------------------
 PDF attachment a*         ----------\       PDF attachment a*
