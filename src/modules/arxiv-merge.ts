@@ -4,7 +4,7 @@ import { catchError } from "./error";
 import { getPref } from "../utils/prefs";
 
 export class arXivMerge {
-  static reservedKeys = ["collections", "dateAdded", "dateModified", "extra"];
+  static reservedKeys = ["collections", "dateAdded", "dateModified"];
 
   @catchError
   static registerRightClickMenuItem() {
@@ -82,6 +82,21 @@ export class arXivMerge {
       // @ts-ignore some fields are not listed in zotero-type
       journalJSON[field] = preprintJSON[field];
     });
+    // `extra` field need more care
+    const preprintExtra = Zotero.Utilities.Internal.extractExtraFields(
+      preprintJSON.extra as string,
+    );
+    journalJSON.extra = Zotero.Utilities.Internal.combineExtraFields(
+      journalJSON.extra as string,
+      preprintExtra.fields,
+    );
+    // We generally want to keep extra information, but remove arXiv info
+    const notes = preprintExtra.extra
+      .split("\n")
+      .filter((line) => !line.startsWith("arXiv:"))
+      .join("\n");
+    if (notes) journalJSON.extra += "\n" + notes;
+
     /* Avoid citation key collision after preprint item updates (say year)
      * For example, no collision:
      * - Published item: li_wang_2024-1
@@ -96,7 +111,12 @@ export class arXivMerge {
      * The workaround here is to set a random citation key for the published item.
      * TODO: What if the user wants to keep the citation key (not fixed in BBT)?
      */
-    publishedItem.setField("extra", `Citation Key: ${crypto.randomUUID()}`);
+    const tempExtra = Zotero.Utilities.Internal.combineExtraFields(
+      journalJSON.extra as string,
+      // @ts-expect-error key not listed in type
+      new Map([["Citation Key", crypto.randomUUID()]]),
+    );
+    publishedItem.setField("extra", tempExtra);
     publishedItem.saveTx();
     preprintItem.fromJSON(journalJSON);
     preprintItem.saveTx();
