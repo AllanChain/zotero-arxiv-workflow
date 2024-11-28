@@ -1,7 +1,13 @@
-pref-mergePreferJournalPDF =
+pref-behavior = 行为
+pref-merge-preferJournalPDF =
     .label = 合并 arXiv 与已发表条目后，默认打开已发表的 PDF
 pref-downloadJournalPDF =
     .label = 在更新 arXiv 条目时下载已发表的 PDF
+pref-merge-arXivExtra =
+    .label = 合并条目时，保留 Extra 字段中的 arXiv 信息
+pref-merge-arXivURL =
+    .label = 合并条目时，在 URL 字段中保留 arXiv 的 URL
+pref-merge-arXiv-warn = 以下两条设置可能导致导出的引用信息包含 arXiv 信息：
 pref-source = arXiv 更新源
 pref-source-doi =
     .label = 关联的 DOI

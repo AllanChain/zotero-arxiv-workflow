@@ -82,6 +82,8 @@ export class arXivMerge {
       // @ts-ignore some fields are not listed in zotero-type
       journalJSON[field] = preprintJSON[field];
     });
+    // Use URL from journal by default, but can be configured to use arXiv URL
+    if (getPref("merge.arXivURL")) journalJSON.url = preprintJSON.url;
     // `extra` field need more care
     const preprintExtra = Zotero.Utilities.Internal.extractExtraFields(
       preprintJSON.extra as string,
@@ -90,11 +92,13 @@ export class arXivMerge {
       journalJSON.extra as string,
       preprintExtra.fields,
     );
+    let notes = preprintExtra.extra;
     // We generally want to keep extra information, but remove arXiv info
-    const notes = preprintExtra.extra
-      .split("\n")
-      .filter((line) => !line.startsWith("arXiv:"))
-      .join("\n");
+    if (!getPref("merge.arXivExtra"))
+      notes = notes
+        .split("\n")
+        .filter((line) => !line.startsWith("arXiv:"))
+        .join("\n");
     if (notes) journalJSON.extra += "\n" + notes;
 
     /* Avoid citation key collision after preprint item updates (say year)

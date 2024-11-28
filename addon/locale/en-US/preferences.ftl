@@ -1,7 +1,13 @@
-pref-mergePreferJournalPDF =
+pref-behavior = Behavior
+pref-merge-preferJournalPDF =
     .label = Prefer to open published PDF after merging
 pref-downloadJournalPDF =
     .label = Download published PDF when updating
+pref-merge-arXivExtra =
+    .label = Keep arXiv information in the Extra field when merging
+pref-merge-arXivURL =
+    .label = Use arXiv URL in the URL field when merging
+pref-merge-arXiv-warn = The following two settings could add arXiv information in the exported citation:
 pref-source = arXiv Update sources
 pref-source-doi =
     .label = Related DOI

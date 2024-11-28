@@ -6,15 +6,27 @@
   onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', {window})"
 >
   <groupbox>
+    <label><html:h2 data-l10n-id="pref-behavior"></html:h2></label>
     <checkbox
       id="zotero-prefpane-__addonRef__-mergePreferJournalPDF"
       preference="extensions.zotero.__addonRef__.mergePreferJournalPDF"
-      data-l10n-id="pref-mergePreferJournalPDF"
+      data-l10n-id="pref-merge-preferJournalPDF"
     />
     <checkbox
       id="zotero-prefpane-__addonRef__-downloadJournalPDF"
       preference="extensions.zotero.__addonRef__.downloadJournalPDF"
       data-l10n-id="pref-downloadJournalPDF"
+    />
+    <html:p data-l10n-id="pref-merge-arXiv-warn"></html:p>
+    <checkbox
+      id="zotero-prefpane-__addonRef__-merge.arXivExtra"
+      preference="extensions.zotero.__addonRef__.merge.arXivExtra"
+      data-l10n-id="pref-merge-arXivExtra"
+    />
+    <checkbox
+      id="zotero-prefpane-__addonRef__-merge.arXivURL"
+      preference="extensions.zotero.__addonRef__.merge.arXivURL"
+      data-l10n-id="pref-merge-arXivURL"
     />
   </groupbox>
   <groupbox>
