@@ -16,6 +16,9 @@ jobs:
   release:
     name: ${{ startsWith(github.ref, 'refs/heads/') && 'Build' || 'Release' }}
     runs-on: ubuntu-latest
+    if: |
+      startsWith(github.ref, 'refs/tags/') ||
+      github.event.head_commit.message != 'chore(publish)*'
     env:
       GITHUB_TOKEN: ${{ secrets.GitHub_TOKEN }}
     steps:
