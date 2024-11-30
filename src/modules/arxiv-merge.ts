@@ -143,6 +143,14 @@ export class arXivMerge {
         title: preprintJSON.archiveID ?? "Preprint URL",
       });
     }
+    if (getPref("merge.trashUnannotatedPDF")) {
+      for (const attachmentID of preprintItem.getAttachments()) {
+        const attachment = await Zotero.Items.getAsync(attachmentID);
+        if (!attachment.isPDFAttachment()) continue;
+        if (attachment.getAnnotations().length) continue;
+        await Zotero.Items.trashTx(attachmentID);
+      }
+    }
     // Set prefered PDF
     if (getPref("mergePreferJournalPDF")) {
       let oldestPDFDate = new Date();
