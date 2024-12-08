@@ -86,10 +86,10 @@ export class arXivMerge {
     if (getPref("merge.arXivURL")) journalJSON.url = preprintJSON.url;
     // `extra` field need more care
     const preprintExtra = Zotero.Utilities.Internal.extractExtraFields(
-      preprintJSON.extra as string,
+      (preprintJSON.extra ?? "") as string,
     );
     journalJSON.extra = Zotero.Utilities.Internal.combineExtraFields(
-      journalJSON.extra as string,
+      (journalJSON.extra ?? "") as string,
       preprintExtra.fields,
     );
     let notes = preprintExtra.extra;
