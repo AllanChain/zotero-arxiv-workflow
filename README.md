@@ -107,7 +107,7 @@ The main logic of merging items is described [above](#-how). A few points to emp
 <summary>JavaScript API</summary>
 
 ```typescript
-async Zotero.arXivWorkflow.merge(
+async Zotero.arXivWorkflow.api.merge(
   preprintItem: Zotero.Item,
   publishedItem: Zotero.Item,
   suppressWarn = false,
@@ -154,7 +154,7 @@ Therefore, to make Zotero perfer a specific PDF, this plugin
 <summary>JavaScript API</summary>
 
 ```typescript
-async Zotero.arXivWorkflow.preferPDF(
+async Zotero.arXivWorkflow.api.preferPDF(
   selectedAttachment: Zotero.Item
 )
 ```
@@ -184,7 +184,7 @@ After that, the preprint item and the newly created journal item will be merged 
 <summary>JavaScript API</summary>
 
 ```typescript
-async Zotero.arXivWorkflow.arXivUpdate(
+async Zotero.arXivWorkflow.api.arXivUpdate(
   preprintItem: Zotero.Item
 )
 ```
@@ -205,7 +205,7 @@ Say you have an arXiv paper PDF and import it into Zotero. Zotero finds that it 
 <summary>JavaScript API</summary>
 
 ```typescript
-async Zotero.arXivWorkflow.updatePDF(
+async Zotero.arXivWorkflow.api.updatePDF(
   journalItem: Zotero.Item
 )
 ```
