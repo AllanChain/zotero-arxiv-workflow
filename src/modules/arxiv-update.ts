@@ -23,11 +23,13 @@ async function createItemByZotero(
 ): Promise<Zotero.Item | false> {
   let translate;
   if (paper.doi) {
+    // @ts-ignore - Translate is not typed
     translate = new Zotero.Translate.Search();
     translate.setIdentifier({ DOI: paper.doi });
     const translators = await translate.getTranslators();
     translate.setTranslator(translators);
   } else if (paper.url) {
+    // @ts-ignore - Translate is not typed
     translate = new Zotero.Translate.Web();
     const doc = await Zotero.HTTP.processDocuments(paper.url, (doc) => doc);
     translate.setDocument(doc[0]);
@@ -274,6 +276,7 @@ class PaperFinder {
     for (const attachmentID of this.item.getAttachments()) {
       const attachment = await Zotero.Items.getAsync(attachmentID);
       if (!attachment.isPDFAttachment()) continue;
+      // @ts-ignore - PDFWorker is not typed
       const fullText = await Zotero.PDFWorker.getFullText(attachmentID, 1);
       const match = fullText.text.match(/arXiv:[\d.]+v(\d+)/);
       if (!match) continue;

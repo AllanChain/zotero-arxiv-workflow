@@ -45,7 +45,7 @@ export class arXivMerge {
     const preprintItem = items.find((item) => item.itemType === "preprint");
     const publishedItem = items.find((item) =>
       (
-        ["journalArticle", "conferencePaper"] as Zotero.Item.ItemType[]
+        ["journalArticle", "conferencePaper"] as _ZoteroTypes.Item.ItemType[]
       ).includes(item.itemType),
     );
     return { preprintItem, publishedItem };
