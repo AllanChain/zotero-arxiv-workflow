@@ -1,6 +1,6 @@
 {
   "name": "zotero-arxiv-workflow",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "description": "arXiv Workflow for Zotero",
   "config": {
     "addonName": "arXiv Workflow for Zotero",
