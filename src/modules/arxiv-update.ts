@@ -286,7 +286,13 @@ class PaperFinder {
       }
     }
     ztoolkit.log(`Current arXiv version: ${localVersion}`);
-    if (localVersion === 0) return undefined;
+    // if (localVersion === 0) return undefined;
+    if (localVersion === 0) {
+      // no local PDF attachment, get the latest version from arXiv
+      // unless the url field is empty or violates arXiv format (http://arxiv.org/abs/Xxxxx)
+      if (!this.item.getField("url")) return undefined;
+      if (!this.item.getField("url").includes("http://arxiv.org/abs/")) return undefined;
+    }
     const htmlResp = await fetch(this.item.getField("url"));
     const htmlContent = await htmlResp.text();
     const match = htmlContent.match(/<strong>\[v(\d+)\]<\/strong>/);
