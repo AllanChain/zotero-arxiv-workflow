@@ -272,10 +272,15 @@ class PaperFinder {
   async arXivPDF(): Promise<PaperIdentifier | undefined> {
     const urlHost = new URL(this.preprintURL).hostname;
     if (urlHost !== KNOWN_PREPRINT_SERVERS.arxiv) return undefined;
+    // Having a local PDF does not mean we can extract version from it.
+    // We skip updating if we fail to extract version, but we will try to
+    // download a version if there is no local PDF.
+    let hasPDF = false;
     let localVersion = 0;
     for (const attachmentID of this.item.getAttachments()) {
       const attachment = await Zotero.Items.getAsync(attachmentID);
       if (!attachment.isPDFAttachment()) continue;
+      hasPDF = true;
       // @ts-ignore - PDFWorker is not typed
       const fullText = await Zotero.PDFWorker.getFullText(attachmentID, 1);
       const match = fullText.text.match(/arXiv:[\d.]+v(\d+)/);
@@ -286,13 +291,13 @@ class PaperFinder {
       }
     }
     ztoolkit.log(`Current arXiv version: ${localVersion}`);
-    if (localVersion === 0) return undefined;
+    if (hasPDF && localVersion === 0) return undefined;
     const htmlResp = await fetch(this.item.getField("url"));
     const htmlContent = await htmlResp.text();
     const match = htmlContent.match(/<strong>\[v(\d+)\]<\/strong>/);
     if (!match) return undefined;
     const onlineVersion = parseInt(match[1], 10);
-    if (onlineVersion <= localVersion) return undefined;
+    if (hasPDF && onlineVersion <= localVersion) return undefined;
     return { url: this.preprintURL, title: `v${onlineVersion} PDF` };
   }
 }
