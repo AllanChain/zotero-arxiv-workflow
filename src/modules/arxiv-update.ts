@@ -8,6 +8,7 @@ const KNOWN_PREPRINT_SERVERS = {
   arxiv: "arxiv.org",
   biorxiv: "www.biorxiv.org",
   medrxiv: "www.medrxiv.org",
+  chemrxiv: "chemrxiv.org",
   psyarxiv: "osf.io",
 };
 
@@ -175,6 +176,7 @@ class PaperFinder {
     ) {
       const arxivID = this.preprintURL.match(/\/(?<arxivID>[\d./]+)v\d+$/)
         ?.groups?.arxivID;
+      if (!arxivID) return undefined;
       const apiURL =
         urlHost === KNOWN_PREPRINT_SERVERS.biorxiv
           ? `https://api.biorxiv.org/details/biorxiv/${arxivID}`
@@ -182,6 +184,15 @@ class PaperFinder {
       const jsonResp = await fetch(apiURL);
       const json = (await jsonResp.json()) as any;
       const doi = json.collection?.[0]?.published as string | undefined;
+      return doi ? { doi, title: "Published PDF" } : undefined;
+    } else if (urlHost == KNOWN_PREPRINT_SERVERS.chemrxiv) {
+      const arxivID = this.preprintURL.match(/\/(?<arxivID>[\da-f]+)$/)?.groups
+        ?.arxivID;
+      if (!arxivID) return undefined;
+      const apiURL = `https://chemrxiv.org/engage/chemrxiv/public-api/v1/items/${arxivID}`;
+      const jsonResp = await fetch(apiURL);
+      const json = (await jsonResp.json()) as any;
+      const doi = json.vor?.vorDoi as string | undefined;
       return doi ? { doi, title: "Published PDF" } : undefined;
     } else {
       return undefined;
