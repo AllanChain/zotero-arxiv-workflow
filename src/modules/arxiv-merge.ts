@@ -49,11 +49,16 @@ export class arXivMerge {
   }
 
   static identifyItems(items: Zotero.Item[]) {
+    const publishedTypes: _ZoteroTypes.Item.ItemType[] = [
+      "journalArticle",
+      "conferencePaper",
+      "thesis",
+      "book",
+      "bookSection",
+    ];
     const preprintItem = items.find((item) => item.itemType === "preprint");
     const publishedItem = items.find((item) =>
-      (
-        ["journalArticle", "conferencePaper"] as _ZoteroTypes.Item.ItemType[]
-      ).includes(item.itemType),
+      publishedTypes.includes(item.itemType),
     );
     return { preprintItem, publishedItem };
   }
