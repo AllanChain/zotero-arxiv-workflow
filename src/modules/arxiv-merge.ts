@@ -182,8 +182,7 @@ export class arXivMerge {
         }
       }
     } else {
-      // @ts-ignore delay is not added to zotero-type
-      await Zotero.Promise.delay(); // magic sleep
+      await Zotero.Promise.delay(0); // magic sleep
     }
     await Zotero.Items.merge(preprintItem, [publishedItem]);
     preprintItem.clearBestAttachmentState();

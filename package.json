@@ -33,7 +33,7 @@
   },
   "homepage": "https://github.com/AllanChain/zotero-arxiv-workflow#readme",
   "dependencies": {
-    "zotero-plugin-toolkit": "^4.0.6"
+    "zotero-plugin-toolkit": "^5.0.0-1"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
@@ -45,7 +45,7 @@
     "typescript": "^5.6.2",
     "typescript-eslint": "^8.8.0",
     "zotero-plugin-scaffold": "^0.5.0",
-    "zotero-types": "^3.0.0"
+    "zotero-types": "^4.0.0-beta.10"
   },
   "prettier": {
     "printWidth": 80,
