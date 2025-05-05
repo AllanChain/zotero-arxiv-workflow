@@ -26,9 +26,6 @@ async function onMainWindowLoad(win: Window): Promise<void> {
   // Create ztoolkit for every window
   addon.data.ztoolkit = createZToolkit();
 
-  // @ts-ignore This is a moz feature
-  win.MozXULElement.insertFTLIfNeeded(`${config.addonRef}-mainWindow.ftl`);
-
   Preferences.registerPreferences();
   if (getPref("features.arXivMerge")) arXivMerge.registerRightClickMenuItem();
   if (getPref("features.arXivUpdate")) arXivUpdate.registerRightClickMenuItem();
