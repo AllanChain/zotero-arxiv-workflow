@@ -2,7 +2,6 @@ import { arXivMerge } from "./modules/arxiv-merge";
 import { arXivUpdate } from "./modules/arxiv-update";
 import { PreferPDF } from "./modules/prefer-pdf";
 import { Preferences } from "./modules/preferences";
-import { config } from "../package.json";
 import { initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
 import { UpdatePDF } from "./modules/update-pdf";
@@ -20,9 +19,13 @@ async function onStartup() {
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
   );
+
+  // Mark initialized as true to confirm plugin loading status
+  // outside of the plugin (e.g. scaffold testing process)
+  addon.data.initialized = true;
 }
 
-async function onMainWindowLoad(win: Window): Promise<void> {
+async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   // Create ztoolkit for every window
   addon.data.ztoolkit = createZToolkit();
 
@@ -43,8 +46,8 @@ function onShutdown(): void {
   addon.data.dialog?.window?.close();
   // Remove addon object
   addon.data.alive = false;
-  // @ts-ignore - Plugin instance is not typed
-  delete Zotero[config.addonInstance];
+  // @ts-expect-error - Plugin instance is not typed
+  delete Zotero[addon.data.config.addonInstance];
 }
 
 // Add your hooks here. For element click, etc.

@@ -1,9 +1,16 @@
-build
-logs
+# dot files
+.DS_Store
+
+# Node.js
 node_modules
-package-lock.json
 pnpm-lock.yaml
 yarn.lock
-.DS_Store
+
+# TSC
+tsconfig.tsbuildinfo
+
+# Scaffold
 .env
 .scaffold
+build
+logs

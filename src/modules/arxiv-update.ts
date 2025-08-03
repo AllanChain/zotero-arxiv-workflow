@@ -105,7 +105,6 @@ export class arXivUpdate {
       ) {
         popupWin.changeLine({ text: tr("download-pdf"), progress: 60 });
         popupWin.show(-1);
-        // @ts-ignore zotero-type mistake
         const attachment = await Zotero.Attachments.addAvailableFile(
           journalItem,
           {

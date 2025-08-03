@@ -7,7 +7,7 @@ export class Preferences {
   static registerPreferences() {
     Zotero.PreferencePanes.register({
       pluginID: config.addonID,
-      src: rootURI + "chrome/content/preferences.xhtml",
+      src: rootURI + "content/preferences.xhtml",
       stylesheets: [`chrome://${config.addonRef}/content/preferences.css`],
       label: getString("prefs-title"),
       image: `chrome://${config.addonRef}/content/icons/favicon.svg`,

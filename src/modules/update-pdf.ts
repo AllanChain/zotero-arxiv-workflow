@@ -37,7 +37,6 @@ export class UpdatePDF {
       progress: 0,
     });
     popupWin.show(-1);
-    // @ts-ignore zotero-type mistake
     const attachmentItem = await Zotero.Attachments.addAvailableFile(
       journalItem,
       { methods: ["doi"] }, // Only download from publisher

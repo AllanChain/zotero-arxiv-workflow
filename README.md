@@ -1,4 +1,4 @@
-<p align="center"><img src="./addon/chrome/content/icons/favicon.svg" width="200"></p>
+<p align="center"><img src="./addon/content/icons/favicon.svg" width="200"></p>
 <h1 align="center">arXiv Workflow for Zotero</h1>
 <p align=center>
   <a href="https://github.com/AllanChain/zotero-arxiv-workflow/releases">

@@ -91,7 +91,7 @@ export class arXivMerge {
     const preprintJSON = preprintItem.toJSON();
     // Use date from the arXiv item
     arXivMerge.reservedKeys.forEach((field) => {
-      // @ts-ignore some fields are not listed in zotero-type
+      // @ts-expect-error some fields are not listed in zotero-type
       journalJSON[field] = preprintJSON[field];
     });
     // Use URL from journal by default, but can be configured to use arXiv URL

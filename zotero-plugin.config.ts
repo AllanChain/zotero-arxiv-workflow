@@ -24,6 +24,9 @@ export default defineConfig({
       buildVersion: pkg.version,
       buildTime: "{{buildTime}}",
     },
+    prefs: {
+      prefix: pkg.config.prefsPrefix,
+    },
     esbuildOptions: [
       {
         entryPoints: ["src/index.ts"],
@@ -32,14 +35,18 @@ export default defineConfig({
         },
         bundle: true,
         target: "firefox115",
-        outfile: `build/addon/chrome/content/scripts/${pkg.config.addonRef}.js`,
+        outfile: `build/addon/content/scripts/${pkg.config.addonRef}.js`,
       },
     ],
   },
 
+  test: {
+    waitForPlugin: `() => Zotero.${pkg.config.addonInstance}.data.initialized`,
+  },
+
   release: {
     bumpp: {
-      // @ts-ignore file is missing in typing
+      // @ts-expect-error file is missing in typing
       files: ["package.json"], // do not update package-lock.json
     },
   },
