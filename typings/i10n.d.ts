@@ -28,5 +28,7 @@ export type FluentMessageId =
   | 'pref-source-pubmed'
   | 'pref-source-semanticScholar'
   | 'prefs-title'
+  | 'update-message'
   | 'update-pdf-prompt'
-  | 'update-prompt';
+  | 'update-status'
+  | 'update-window';

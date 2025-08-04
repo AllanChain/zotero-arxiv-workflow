@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://zotero-platform/content/zotero.css"?>
+<?xml-stylesheet href="chrome://__addonRef__/content/update-dialog.css"?>
+<window
+  xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+  xmlns:html="http://www.w3.org/1999/xhtml"
+  onload="window.arguments[0].loadLock.resolve()"
+>
+  <linkset>
+    <html:link rel="localization" href="__addonRef__-addon.ftl" />
+  </linkset>
+  <script src="chrome://zotero/content/include.js" />
+  <vbox>
+    <html:h2 data-l10n-id="update-window"></html:h2>
+    <html:div id="__addonRef__-status-container"></html:div>
+  </vbox>
+</window>

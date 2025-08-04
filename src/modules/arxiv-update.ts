@@ -3,6 +3,7 @@ import { getString } from "../utils/locale";
 import { getPref } from "../utils/prefs";
 import { arXivMerge } from "./arxiv-merge";
 import { catchError } from "./error";
+import { UpdateStatus, UpdateTableData } from "../types";
 
 const KNOWN_PREPRINT_SERVERS = {
   arxiv: "arxiv.org",
@@ -16,6 +17,26 @@ interface PaperIdentifier {
   doi?: string;
   url?: string;
   title: string;
+}
+
+type SimpleUpdateStatus = "pending" | "processing" | "done" | "error";
+type ReportProgress = (status: UpdateStatus, msg?: string) => void;
+
+function simplifyUpdateStatus(status: UpdateStatus): SimpleUpdateStatus {
+  switch (status) {
+    case "pending":
+      return "pending";
+    case "finding-update":
+    case "downloading-metadata":
+    case "downloading-pdf":
+      return "processing";
+    case "up-to-date":
+    case "updated":
+      return "done";
+    case "download-error":
+    case "general-error":
+      return "error";
+  }
 }
 
 async function createItemByZotero(
@@ -58,73 +79,245 @@ export class arXivUpdate {
       icon: arXivUpdate.menuIcon,
       getVisibility: () => {
         const items = Zotero.getActiveZoteroPane().getSelectedItems();
-        if (items.length !== 1) return false;
-        const preprintItem = items[0];
-        if (preprintItem.itemType !== "preprint") return false;
-        const arXivURL = preprintItem.getField("url");
-        const urlHost = new URL(arXivURL).hostname;
-        return Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost);
+        for (const preprintItem of items) {
+          if (preprintItem.itemType !== "preprint") return false;
+          const arXivURL = preprintItem.getField("url");
+          const urlHost = new URL(arXivURL).hostname;
+          if (!Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost))
+            return false;
+        }
+        return true;
       },
-      commandListener: async (ev) => {
-        const preprintItem = Zotero.getActiveZoteroPane().getSelectedItems()[0];
-        arXivUpdate.update(preprintItem);
+      commandListener: async () => {
+        const preprintItems = Zotero.getActiveZoteroPane().getSelectedItems();
+        arXivUpdate.update(preprintItems);
       },
     });
   }
 
-  static async update(preprintItem: Zotero.Item) {
-    const tr = (branch: string) => getString("update-prompt", branch);
-    const popupWin = new ztoolkit.ProgressWindow(getString("update-prompt"));
-    popupWin.createLine({
-      icon: arXivUpdate.menuIcon,
-      text: tr("find-published"),
-      progress: 0,
-    });
-    popupWin.show(-1);
-    const showError = (msg: string) => {
-      popupWin.changeLine({ text: tr(msg), progress: 100 }).show(1000);
-    };
+  static async update(
+    preprintItem: Zotero.Item | Zotero.Item[],
+    options: { openWindow?: boolean } = {},
+  ) {
+    arXivUpdate.createUpdateTasks(
+      Array.isArray(preprintItem) ? preprintItem : [preprintItem],
+    );
+    arXivUpdate.sortTableData();
+    const window = addon.data.arXivUpdate.window;
+    const tableHelper = addon.data.arXivUpdate.tableHelper;
+    if (window !== undefined && !window.closed && tableHelper !== undefined) {
+      // Simply update data if window is open and valid
+      tableHelper.treeInstance.invalidate();
+      window.sizeToContent({
+        prefWidth: 500,
+        maxHeight: 300,
+      });
+    } else {
+      // Clear old data and reopen window otherwise
+      addon.data.arXivUpdate.tableData =
+        addon.data.arXivUpdate.tableData.filter((data) =>
+          ["processing", "pending"].includes(simplifyUpdateStatus(data.status)),
+        );
+      if (options.openWindow ?? true) {
+        arXivUpdate.openDialog();
+      }
+    }
+  }
+
+  static async updateItemWithProgress(
+    preprintItem: Zotero.Item,
+    reportProgress: ReportProgress,
+  ) {
+    reportProgress("finding-update");
     try {
       const paper = await new PaperFinder(preprintItem).find();
-      if (paper === undefined) return showError("uptodate");
+      if (paper === undefined) return reportProgress("up-to-date");
       // Download published version
-      popupWin.changeLine({ text: tr("download-paper"), progress: 30 });
-      popupWin.show(-1);
+      reportProgress("downloading-metadata");
       const collection = Zotero.getActiveZoteroPane().getSelectedCollection();
       let collections: number[] = [];
       if (collection) {
         collections = [collection.id];
       }
       const journalItem = await createItemByZotero(paper, collections);
-      if (!journalItem) return showError("download-fail");
+      if (!journalItem) return reportProgress("download-error");
       journalItem.saveTx();
 
+      let hasErrorDownloadingPDF = false;
       if (
         getPref("downloadJournalPDF") &&
         Zotero.Attachments.canFindPDFForItem(journalItem)
       ) {
-        popupWin.changeLine({ text: tr("download-pdf"), progress: 60 });
-        popupWin.show(-1);
+        reportProgress("downloading-pdf");
         const attachment = await Zotero.Attachments.addAvailableFile(
           journalItem,
-          {
-            methods: ["doi"], // Only download from publisher
-          },
+          // Only download from publisher
+          { methods: ["doi"] },
         );
         if (attachment) {
           attachment.setField("title", paper.title);
           attachment.saveTx();
         } else {
-          showError("download-fail");
+          hasErrorDownloadingPDF = true;
         }
       }
       await arXivMerge.merge(preprintItem, journalItem, true);
 
-      popupWin.changeLine({ text: tr("updated"), progress: 100 }).show(1000);
+      if (hasErrorDownloadingPDF) {
+        reportProgress(
+          "updated",
+          getString("update-message", "download-pdf-error"),
+        );
+      } else {
+        reportProgress("updated");
+      }
     } catch (err) {
       ztoolkit.log(err);
-      return showError("error");
+      reportProgress(
+        "general-error",
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+            ? err
+            : "Unknown error",
+      );
     }
+  }
+
+  static createUpdateTasks(preprintItems: Zotero.Item[]) {
+    for (const preprintItem of preprintItems) {
+      if (
+        addon.data.arXivUpdate.tableData.findIndex(
+          (data) => data.id === preprintItem.id,
+        ) == -1
+      ) {
+        addon.data.arXivUpdate.tableData.push({
+          id: preprintItem.id,
+          title: preprintItem.getDisplayTitle(),
+          status: "pending",
+          message: undefined,
+        });
+        addon.data.arXivUpdate.queue.add(() =>
+          arXivUpdate.updateItemWithProgress(preprintItem, (status, msg) => {
+            const data = addon.data.arXivUpdate.tableData.find(
+              (item) => item.id === preprintItem.id,
+            )!;
+            data.status = status;
+            data.message = msg;
+            arXivUpdate.sortTableData();
+          }),
+        );
+      }
+    }
+  }
+
+  static async openDialog() {
+    const loadLock = Zotero.Promise.defer();
+    const window = Zotero.getMainWindow().openDialog(
+      `chrome://${config.addonRef}/content/update-dialog.xhtml`,
+      "_blank",
+      "chrome,scroll,centerscreen",
+      { loadLock },
+    )!;
+    addon.data.arXivUpdate.window = window;
+    window.addEventListener("DOMContentLoaded", () => loadLock.resolve());
+    await loadLock.promise;
+
+    addon.data.arXivUpdate.tableHelper = new ztoolkit.VirtualizedTable(window)
+      .setContainerId(`${config.addonRef}-status-container`)
+      .setProp({
+        id: `${config.addonRef}-status-table`,
+        columns: [
+          {
+            dataKey: "title",
+            label: getString("update-window", "col-title"),
+            width: 100,
+          },
+          {
+            dataKey: "status",
+            label: getString("update-window", "col-status"),
+            // @ts-expect-error: renderer is not typed
+            renderer(
+              index: number,
+              dataString: string,
+              column: _ZoteroTypes.ItemTreeManager.ItemTreeColumnOptions & {
+                className: string;
+              },
+            ) {
+              const colorMap: Record<SimpleUpdateStatus, string> = {
+                pending: "#999999",
+                processing: "#2ea8e5",
+                done: "#5fb236",
+                error: "#ff6666",
+              };
+              const status = simplifyUpdateStatus(
+                addon.data.arXivUpdate.tableData[index].status,
+              );
+              const color = colorMap[status];
+
+              const div = window.document.createElement("span");
+              const span = window.document.createElement("span");
+              span.className = "tag-swatch";
+              span.style.color = color;
+              div.appendChild(span);
+
+              const text = window.document.createElement("span");
+              text.className = "status-message";
+              text.innerText = dataString;
+              div.appendChild(text);
+
+              div.className = `cell ${column.className}`;
+              return div;
+            },
+          },
+        ],
+        containerWidth: 500,
+        staticColumns: true,
+        showHeader: true,
+        isSelectable: () => false,
+      })
+      .setProp("getRowCount", () => addon.data.arXivUpdate.tableData.length)
+      .setProp("getRowData", (index) => {
+        const data = addon.data.arXivUpdate.tableData[index];
+        let status = getString("update-status", data.status);
+        if (data.message) {
+          status += ": " + data.message;
+        }
+        return { title: data.title, status };
+      })
+      .render(-1, () => {
+        window.sizeToContent({ prefWidth: 500, maxHeight: 300 });
+      });
+  }
+
+  static sortTableData() {
+    const newTableData: UpdateTableData[] = [];
+    for (const tableDatum of addon.data.arXivUpdate.tableData) {
+      if (simplifyUpdateStatus(tableDatum.status) === "error") {
+        newTableData.push(tableDatum);
+      }
+    }
+    for (const tableDatum of addon.data.arXivUpdate.tableData) {
+      if (simplifyUpdateStatus(tableDatum.status) === "processing") {
+        newTableData.push(tableDatum);
+      }
+    }
+    for (const tableDatum of addon.data.arXivUpdate.tableData) {
+      if (simplifyUpdateStatus(tableDatum.status) === "pending") {
+        newTableData.push(tableDatum);
+      }
+    }
+    for (const tableDatum of addon.data.arXivUpdate.tableData) {
+      if (simplifyUpdateStatus(tableDatum.status) === "done") {
+        newTableData.push(tableDatum);
+      }
+    }
+    addon.data.arXivUpdate.tableData.splice(
+      0,
+      addon.data.arXivUpdate.tableData.length,
+      ...newTableData,
+    );
+    addon.data.arXivUpdate.tableHelper?.treeInstance.invalidate();
   }
 }
 

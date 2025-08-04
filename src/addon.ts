@@ -1,7 +1,8 @@
 import { config } from "../package.json";
-import { ColumnOptions, DialogHelper } from "zotero-plugin-toolkit";
+import PQueue from "p-queue";
 import hooks from "./hooks";
 import { createZToolkit } from "./utils/ztoolkit";
+import type { UpdateWindowData } from "./types";
 
 class Addon {
   public data: {
@@ -16,10 +17,8 @@ class Addon {
     };
     prefs?: {
       window: Window;
-      columns: Array<ColumnOptions>;
-      rows: Array<{ [dataKey: string]: string }>;
     };
-    dialog?: DialogHelper;
+    arXivUpdate: UpdateWindowData;
   };
   // Lifecycle hooks
   public hooks: typeof hooks;
@@ -33,6 +32,10 @@ class Addon {
       env: __env__,
       initialized: false,
       ztoolkit: createZToolkit(),
+      arXivUpdate: {
+        tableData: [],
+        queue: new PQueue({ concurrency: 2 }),
+      },
     };
     this.hooks = hooks;
     this.api = {};

@@ -1,0 +1,21 @@
+vbox {
+  height: 100%;
+  overflow-y: scroll;
+  margin-left: 1em;
+  margin-right: 1em;
+}
+
+.tag-swatch {
+  display: inline-block;
+  -moz-context-properties: fill, fill-opacity, stroke, stroke-opacity;
+  width: 0.92307692em;
+  height: 0.92307692em;
+  background:
+    url("chrome://zotero/skin/tag-circle.svg") no-repeat center/100%,
+    url("chrome://zotero/skin/tag-circle-border.svg") no-repeat center/0;
+  fill: currentcolor;
+}
+
+.status-message {
+  margin-left: 4px;
+}

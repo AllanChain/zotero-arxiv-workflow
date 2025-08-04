@@ -7,16 +7,23 @@ prefs-title = arXiv Workflow
 merge-confirm = Merge Items
     .msg = Are you sure to merge items with different title?
 
-update-prompt = Update arXiv paper
-  .find-published = Finding published version...
-  .find-arxiv = Finding new arXiv version...
-  .uptodate = Already up-to-date
-  .unknown-version = Failed to determine current version
-  .download-pdf = Downloading PDF...
-  .download-paper = Downloading paper...
-  .download-fail = Failed to download
-  .updated = arXiv paper updated
-  .error = Error updating arXiv paper
+update-window = Update arXiv Paper
+  .h1-title = arXiv Update Queue
+  .col-title = Title
+  .col-status = Status
+
+update-message =
+  .download-pdf-error = No PDF available
+
+update-status =
+  .pending = Pending
+  .finding-update = Finding updated version
+  .downloading-metadata = Downloading paper metadata
+  .downloading-pdf = Downloading paper PDF
+  .up-to-date = Already up-to-date
+  .updated = Paper updated
+  .download-error = Failed to download paper metadata
+  .general-error = Update failed
 
 update-pdf-prompt = Download latest PDF
   .download = Downloading PDF...
