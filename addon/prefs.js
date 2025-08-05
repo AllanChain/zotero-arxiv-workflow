@@ -12,3 +12,4 @@ pref("__prefsPrefix__.mergePreferJournalPDF", true);
 pref("__prefsPrefix__.merge.arXivExtra", false);
 pref("__prefsPrefix__.merge.arXivURL", false);
 pref("__prefsPrefix__.merge.trashUnannotatedPDF", false);
+pref("__prefsPrefix__.update.concurrency", 2);

@@ -21,5 +21,6 @@ export type UpdateWindowData = {
   tableData: UpdateTableData[];
   tableHelper?: VirtualizedTableHelper;
   window?: WindowProxy;
+  unregisterObserver?: () => void;
   queue: PQueue;
 };

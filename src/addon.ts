@@ -3,6 +3,7 @@ import PQueue from "p-queue";
 import hooks from "./hooks";
 import { createZToolkit } from "./utils/ztoolkit";
 import type { UpdateWindowData } from "./types";
+import { getPref } from "./utils/prefs";
 
 class Addon {
   public data: {
@@ -34,7 +35,7 @@ class Addon {
       ztoolkit: createZToolkit(),
       arXivUpdate: {
         tableData: [],
-        queue: new PQueue({ concurrency: 2 }),
+        queue: new PQueue({ concurrency: getPref("update.concurrency") }),
       },
     };
     this.hooks = hooks;

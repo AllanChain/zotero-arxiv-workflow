@@ -5,7 +5,7 @@ import { Preferences } from "./modules/preferences";
 import { initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
 import { UpdatePDF } from "./modules/update-pdf";
-import { getPref } from "./utils/prefs";
+import { getPref, registerPrefObserver } from "./utils/prefs";
 
 async function onStartup() {
   await Promise.all([
@@ -31,9 +31,17 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
 
   Preferences.registerPreferences();
   if (getPref("features.arXivMerge")) arXivMerge.registerRightClickMenuItem();
-  if (getPref("features.arXivUpdate")) arXivUpdate.registerRightClickMenuItem();
   if (getPref("features.preferPDF")) PreferPDF.registerRightClickMenuItem();
   if (getPref("features.updatePDF")) UpdatePDF.registerRightClickMenuItem();
+  if (getPref("features.arXivUpdate")) {
+    arXivUpdate.registerRightClickMenuItem();
+    addon.data.arXivUpdate.unregisterObserver = registerPrefObserver(
+      "update.concurrency",
+      (concurrency) => {
+        addon.data.arXivUpdate.queue.concurrency = concurrency;
+      },
+    );
+  }
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
@@ -44,6 +52,7 @@ function onShutdown(): void {
   ztoolkit.unregisterAll();
   // Remove addon object
   addon.data.alive = false;
+  addon.data.arXivUpdate.unregisterObserver?.();
   // @ts-expect-error - Plugin instance is not typed
   delete Zotero[addon.data.config.addonInstance];
 }
