@@ -108,7 +108,7 @@ export class arXivUpdate {
     if (window !== undefined && !window.closed && tableHelper !== undefined) {
       // Simply update data if window is open and valid
       tableHelper.treeInstance.invalidate();
-      window.sizeToContent({
+      (window.sizeToContentConstrained ?? window.sizeToContent)({
         prefWidth: 500,
         maxHeight: 300,
       });
@@ -237,38 +237,7 @@ export class arXivUpdate {
             dataKey: "status",
             label: getString("update-window", "col-status"),
             // @ts-expect-error: renderer is not typed
-            renderer(
-              index: number,
-              dataString: string,
-              column: _ZoteroTypes.ItemTreeManager.ItemTreeColumnOptions & {
-                className: string;
-              },
-            ) {
-              const colorMap: Record<SimpleUpdateStatus, string> = {
-                pending: "#999999",
-                processing: "#2ea8e5",
-                done: "#5fb236",
-                error: "#ff6666",
-              };
-              const status = simplifyUpdateStatus(
-                addon.data.arXivUpdate.tableData[index].status,
-              );
-              const color = colorMap[status];
-
-              const div = window.document.createElement("span");
-              const span = window.document.createElement("span");
-              span.className = "tag-swatch";
-              span.style.color = color;
-              div.appendChild(span);
-
-              const text = window.document.createElement("span");
-              text.className = "status-message";
-              text.innerText = dataString;
-              div.appendChild(text);
-
-              div.className = `cell ${column.className}`;
-              return div;
-            },
+            renderer: this.renderStatusCell, // For Zotero 7.1+
           },
         ],
         containerWidth: 500,
@@ -279,15 +248,62 @@ export class arXivUpdate {
       .setProp("getRowCount", () => addon.data.arXivUpdate.tableData.length)
       .setProp("getRowData", (index) => {
         const data = addon.data.arXivUpdate.tableData[index];
-        let status = getString("update-status", data.status);
+        let message = getString("update-status", data.status);
         if (data.message) {
-          status += ": " + data.message;
+          message += ": " + data.message;
         }
-        return { title: data.title, status };
+        // Use Emoji for Zotero < 7.1
+        const emojiMap: Record<SimpleUpdateStatus, string> = {
+          pending: "⚪",
+          processing: "🔵",
+          done: "🟢",
+          error: "🔴",
+        };
+        message = emojiMap[simplifyUpdateStatus(data.status)] + " " + message;
+        return { title: data.title, status: message };
       })
       .render(-1, () => {
-        window.sizeToContent({ prefWidth: 500, maxHeight: 300 });
+        (window.sizeToContentConstrained ?? window.sizeToContent)({
+          prefWidth: 500,
+          maxHeight: 300,
+        });
       });
+  }
+
+  static renderStatusCell(
+    index: number,
+    dataString: string,
+    column: _ZoteroTypes.ItemTreeManager.ItemTreeColumnOptions & {
+      className: string;
+    },
+  ) {
+    const document = addon.data.arXivUpdate.window?.document;
+    if (!document) return;
+    const colorMap: Record<SimpleUpdateStatus, string> = {
+      pending: "#999999",
+      processing: "#2ea8e5",
+      done: "#5fb236",
+      error: "#ff6666",
+    };
+    const status = simplifyUpdateStatus(
+      addon.data.arXivUpdate.tableData[index].status,
+    );
+    const color = colorMap[status];
+
+    const div = document.createElement("span");
+    const span = document.createElement("span");
+    span.className = "tag-swatch";
+    span.style.color = color;
+    div.appendChild(span);
+
+    const text = document.createElement("span");
+    text.className = "status-message";
+    // Remove Emoji circle
+    text.innerText = dataString.substring(dataString.indexOf(" "));
+    div.appendChild(text);
+
+    div.className = `cell ${column.className}`;
+    return div;
   }
 
   static sortTableData() {
