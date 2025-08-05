@@ -36,23 +36,23 @@
   "homepage": "https://github.com/AllanChain/zotero-arxiv-workflow#readme",
   "dependencies": {
     "p-queue": "^8.1.0",
-    "zotero-plugin-toolkit": "^5.0.0-1"
+    "zotero-plugin-toolkit": "^5.0.1"
   },
   "devDependencies": {
-    "@eslint/js": "^9.9.1",
+    "@eslint/js": "^9.32.0",
     "@types/chai": "^5.2.2",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^22.7.4",
+    "@types/node": "^22.17.0",
     "@zotero-plugin/eslint-config": "^0.6.7",
     "chai": "^5.2.1",
-    "eslint": "^9.12.0",
-    "husky": "^9.1.6",
-    "lint-staged": "^16.0.0",
+    "eslint": "^9.32.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.4",
     "mocha": "^11.7.1",
-    "prettier": "^3.3.3",
-    "typescript": "^5.6.2",
-    "typescript-eslint": "^8.8.0",
-    "zotero-plugin-scaffold": "^0.7.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.39.0",
+    "zotero-plugin-scaffold": "^0.8.0",
     "zotero-types": "^4.0.5"
   },
   "prettier": {
@@ -70,5 +70,5 @@
       }
     ]
   },
-  "packageManager": "npm@11.5.1+sha512.232e6f5d9e799bcb486920b3e9ba907fdf96e576cf7e8c9446c8162e33a416096a1d37a9e910d9a918f6b1f606791c99bc6bb61ee2569b496ec74af13d0dbd95"
+  "packageManager": "npm@11.5.2+sha512.aac1241cfc3f41dc38780d64295c6c6b917a41e24288b33519a7b11adfc5a54a5f881c642d7557215b6c70e01e55655ed7ba666300fd0238bc75fb17478afaf3"
 }
