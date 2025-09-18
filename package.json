@@ -22,7 +22,7 @@
   },
   "lint-staged": {
     "*.{ts,js,mjs}": "eslint --fix",
-    "*.{ts,js,mjs,css,xhtml,md,yaml,json}": "prettier -w"
+    "*.{ts,js,mjs,css,xhtml,md,yml,json}": "prettier -w"
   },
   "repository": {
     "type": "git",

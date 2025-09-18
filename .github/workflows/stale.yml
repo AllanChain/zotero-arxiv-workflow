@@ -2,7 +2,7 @@ name: Mark and close stale issues
 
 on:
   schedule:
-    - cron: '18 8 * * SAT'
+    - cron: "18 8 * * SAT"
 
 jobs:
   stale:
