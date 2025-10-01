@@ -35,23 +35,23 @@
   },
   "homepage": "https://github.com/AllanChain/zotero-arxiv-workflow#readme",
   "dependencies": {
-    "p-queue": "^8.1.0",
+    "p-queue": "^8.1.1",
     "zotero-plugin-toolkit": "^5.0.1"
   },
   "devDependencies": {
-    "@eslint/js": "^9.32.0",
+    "@eslint/js": "^9.36.0",
     "@types/chai": "^5.2.2",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^22.17.0",
+    "@types/node": "^22.18.8",
     "@zotero-plugin/eslint-config": "^0.6.7",
     "chai": "^6.2.0",
-    "eslint": "^9.32.0",
+    "eslint": "^9.36.0",
     "husky": "^9.1.7",
-    "lint-staged": "^16.1.4",
-    "mocha": "^11.7.1",
+    "lint-staged": "^16.2.3",
+    "mocha": "^11.7.3",
     "prettier": "^3.6.2",
-    "typescript": "^5.9.2",
-    "typescript-eslint": "^8.39.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.45.0",
     "zotero-plugin-scaffold": "^0.8.0",
     "zotero-types": "^4.0.5"
   },
@@ -70,5 +70,5 @@
       }
     ]
   },
-  "packageManager": "npm@11.5.2+sha512.aac1241cfc3f41dc38780d64295c6c6b917a41e24288b33519a7b11adfc5a54a5f881c642d7557215b6c70e01e55655ed7ba666300fd0238bc75fb17478afaf3"
+  "packageManager": "npm@11.6.1+sha512.ee20d21c3a2ea7ab8c409dfbc96ae17ea71b3211745047c645aa7a36ff9a29072b2095e50a2d9c29b8fbe5606688795cc2c402cbf534cc4c0365d031e87fd56b"
 }
