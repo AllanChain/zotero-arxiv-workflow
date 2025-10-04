@@ -19,7 +19,12 @@ interface PaperIdentifier {
   title: string;
 }
 
-type SimpleUpdateStatus = "pending" | "processing" | "done" | "error";
+type SimpleUpdateStatus =
+  | "pending"
+  | "processing"
+  | "up-to-date"
+  | "updated"
+  | "error";
 type ReportProgress = (status: UpdateStatus, msg?: string) => void;
 
 function simplifyUpdateStatus(status: UpdateStatus): SimpleUpdateStatus {
@@ -31,8 +36,9 @@ function simplifyUpdateStatus(status: UpdateStatus): SimpleUpdateStatus {
     case "downloading-pdf":
       return "processing";
     case "up-to-date":
+      return "up-to-date";
     case "updated":
-      return "done";
+      return "updated";
     case "download-error":
     case "general-error":
       return "error";
@@ -256,7 +262,8 @@ export class arXivUpdate {
         const emojiMap: Record<SimpleUpdateStatus, string> = {
           pending: "⚪",
           processing: "🔵",
-          done: "🟢",
+          "up-to-date": "🟢",
+          updated: "🟢",
           error: "🔴",
         };
         message = emojiMap[simplifyUpdateStatus(data.status)] + " " + message;
@@ -282,7 +289,8 @@ export class arXivUpdate {
     const colorMap: Record<SimpleUpdateStatus, string> = {
       pending: "#999999",
       processing: "#2ea8e5",
-      done: "#5fb236",
+      updated: "#5fb236",
+      "up-to-date": "#5fb236",
       error: "#ff6666",
     };
     const status = simplifyUpdateStatus(
@@ -308,24 +316,17 @@ export class arXivUpdate {
 
   static sortTableData() {
     const newTableData: UpdateTableData[] = [];
-    for (const tableDatum of addon.data.arXivUpdate.tableData) {
-      if (simplifyUpdateStatus(tableDatum.status) === "error") {
-        newTableData.push(tableDatum);
-      }
-    }
-    for (const tableDatum of addon.data.arXivUpdate.tableData) {
-      if (simplifyUpdateStatus(tableDatum.status) === "processing") {
-        newTableData.push(tableDatum);
-      }
-    }
-    for (const tableDatum of addon.data.arXivUpdate.tableData) {
-      if (simplifyUpdateStatus(tableDatum.status) === "pending") {
-        newTableData.push(tableDatum);
-      }
-    }
-    for (const tableDatum of addon.data.arXivUpdate.tableData) {
-      if (simplifyUpdateStatus(tableDatum.status) === "done") {
-        newTableData.push(tableDatum);
+    for (const status of [
+      "error",
+      "processing",
+      "pending",
+      "updated",
+      "up-to-date",
+    ]) {
+      for (const tableDatum of addon.data.arXivUpdate.tableData) {
+        if (simplifyUpdateStatus(tableDatum.status) === status) {
+          newTableData.push(tableDatum);
+        }
       }
     }
     addon.data.arXivUpdate.tableData.splice(
