@@ -249,25 +249,39 @@ export class arXivUpdate {
         containerWidth: 500,
         staticColumns: true,
         showHeader: true,
-        isSelectable: () => false,
-      })
-      .setProp("getRowCount", () => addon.data.arXivUpdate.tableData.length)
-      .setProp("getRowData", (index) => {
-        const data = addon.data.arXivUpdate.tableData[index];
-        let message = getString("update-status", data.status);
-        if (data.message) {
-          message += ": " + data.message;
-        }
-        // Use Emoji for Zotero < 7.1
-        const emojiMap: Record<SimpleUpdateStatus, string> = {
-          pending: "⚪",
-          processing: "🔵",
-          "up-to-date": "🟢",
-          updated: "🟢",
-          error: "🔴",
-        };
-        message = emojiMap[simplifyUpdateStatus(data.status)] + " " + message;
-        return { title: data.title, status: message };
+        multiSelect: false,
+        getRowCount: () => addon.data.arXivUpdate.tableData.length,
+        getRowData: (index) => {
+          const data = addon.data.arXivUpdate.tableData[index];
+          let message = getString("update-status", data.status);
+          if (data.message) {
+            message += ": " + data.message;
+          }
+          // Use Emoji for Zotero < 7.1
+          const emojiMap: Record<SimpleUpdateStatus, string> = {
+            pending: "⚪",
+            processing: "🔵",
+            "up-to-date": "🟢",
+            updated: "🟢",
+            error: "🔴",
+          };
+          message = emojiMap[simplifyUpdateStatus(data.status)] + " " + message;
+          return { title: data.title, status: message };
+        },
+        onSelectionChange: (selection) => {
+          const selectedRow = selection.selected.values().next().value!;
+          const paperId = addon.data.arXivUpdate.tableData[selectedRow].id;
+          Zotero.getMainWindow()?.ZoteroPane.selectItem(paperId);
+        },
+        // @ts-expect-error Wrong type in ztoolkit
+        onActivate: (_, items) => {
+          const paperId = addon.data.arXivUpdate.tableData[items[0]].id;
+          const win = Zotero.getMainWindow();
+          if (win) {
+            win.ZoteroPane.selectItem(paperId);
+            win.focus();
+          }
+        },
       })
       .render(-1, () => {
         (window.sizeToContentConstrained ?? window.sizeToContent)({
