@@ -245,7 +245,7 @@ export class arXivUpdate {
             dataKey: "status",
             label: getString("update-window", "col-status"),
             // @ts-expect-error: renderer is not typed
-            renderer: this.renderStatusCell, // For Zotero 7.1+
+            renderer: arXivUpdate.renderStatusCell, // For Zotero 7.1+
           },
         ],
         containerWidth: 500,
@@ -271,7 +271,8 @@ export class arXivUpdate {
           return { title: data.title, status: message };
         },
         onSelectionChange: (selection) => {
-          const selectedRow = selection.selected.values().next().value!;
+          const selectedRow = selection.selected.values().next().value;
+          if (selectedRow === undefined) return;
           const paperId = addon.data.arXivUpdate.tableData[selectedRow].id;
           Zotero.getMainWindow()?.ZoteroPane.selectItem(paperId);
         },
