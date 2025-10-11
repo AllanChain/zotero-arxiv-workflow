@@ -13,3 +13,4 @@ pref("__prefsPrefix__.merge.arXivExtra", false);
 pref("__prefsPrefix__.merge.arXivURL", false);
 pref("__prefsPrefix__.merge.trashUnannotatedPDF", false);
 pref("__prefsPrefix__.update.concurrency", 2);
+pref("__prefsPrefix__.update.alwaysShowButton", false);

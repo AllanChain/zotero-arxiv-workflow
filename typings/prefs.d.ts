@@ -22,6 +22,7 @@ declare namespace _ZoteroTypes {
       "merge.arXivURL": boolean;
       "merge.trashUnannotatedPDF": boolean;
       "update.concurrency": number;
+      "update.alwaysShowButton": boolean;
     };
   }
 }

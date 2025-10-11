@@ -84,15 +84,17 @@ export class arXivUpdate {
       label: getString("menuitem-update"),
       icon: arXivUpdate.menuIcon,
       getVisibility: () => {
-        const items = Zotero.getActiveZoteroPane().getSelectedItems();
-        for (const preprintItem of items) {
-          if (preprintItem.itemType !== "preprint") return false;
-          const arXivURL = preprintItem.getField("url");
-          const urlHost = new URL(arXivURL).hostname;
-          if (!Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost))
-            return false;
-        }
-        return true;
+        const isKnownPreprintItem = Zotero.getActiveZoteroPane()
+          .getSelectedItems()
+          .map((item) => {
+            if (item.itemType !== "preprint") return false;
+            const arXivURL = item.getField("url");
+            const urlHost = new URL(arXivURL).hostname;
+            return Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost);
+          });
+        if (getPref("update.alwaysShowButton"))
+          return isKnownPreprintItem.some(Boolean);
+        else return isKnownPreprintItem.every(Boolean);
       },
       commandListener: async () => {
         const preprintItems = Zotero.getActiveZoteroPane().getSelectedItems();
