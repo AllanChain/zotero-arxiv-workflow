@@ -43,11 +43,4 @@ export default defineConfig({
   test: {
     waitForPlugin: `() => Zotero.${pkg.config.addonInstance}.data.initialized`,
   },
-
-  release: {
-    bumpp: {
-      // @ts-expect-error file is missing in typing
-      files: ["package.json"], // do not update package-lock.json
-    },
-  },
 });
