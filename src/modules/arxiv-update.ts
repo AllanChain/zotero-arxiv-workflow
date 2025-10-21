@@ -45,6 +45,11 @@ function simplifyUpdateStatus(status: UpdateStatus): SimpleUpdateStatus {
   }
 }
 
+function matchTitle(base: string, target: any): boolean {
+  if (typeof target !== "string") return false;
+  return base.toLowerCase().trim() === target.toLowerCase().trim();
+}
+
 async function createItemByZotero(
   paper: PaperIdentifier,
   collections: number[],
@@ -454,8 +459,7 @@ class PaperFinder {
     const info = json?.result?.hits?.hit?.[0]?.info;
     // Remove final `.` in title (idk why dblp has this)
     const title = info?.title?.replace(/\.$/, "");
-    // Require exact title match
-    if (this.title !== title) {
+    if (!matchTitle(this.title, title)) {
       ztoolkit.log(
         title
           ? `DBLP title mismatch: expected "${this.title}", got "${title}"`
@@ -485,8 +489,7 @@ class PaperFinder {
     // Remove final `.` in title (idk why PubMed has this)
     const info = paperJson?.result?.[paperId];
     const title = info?.title?.replace(/\.$/, "");
-    // Require exact title match
-    if (this.title !== title) {
+    if (!matchTitle(this.title, title)) {
       ztoolkit.log(
         title
           ? `PubMed title mismatch: expected "${this.title}", got "${title}"`
