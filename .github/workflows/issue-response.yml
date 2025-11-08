@@ -15,12 +15,12 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            const labels = github.rest.issues.listLabelsOnIssue({
+            const labels = await github.rest.issues.listLabelsOnIssue({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             })
-            if (labels.some(label => label.name === "awaiting-response")) {
+            if (labels.data.some(label => label.name === "awaiting-response")) {
               github.rest.issues.removeLabel({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
