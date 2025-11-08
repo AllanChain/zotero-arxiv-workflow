@@ -7,15 +7,24 @@ on:
 jobs:
   remove-label:
     runs-on: ubuntu-latest
-    if: github.event.issue.user.login != github.event.sender.login
+    if: github.event.sender.login != github.repository_owner
+    permissions:
+      issues: write
     steps:
       - name: Remove label
         uses: actions/github-script@v8
         with:
           script: |
-            github.rest.issues.removeLabel({
+            const labels = github.rest.issues.listLabelsOnIssue({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              name: 'awaiting-response'
             })
+            if (labels.some(label => label.name === "awaiting-response")) {
+              github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 'awaiting-response'
+              })
+            }
