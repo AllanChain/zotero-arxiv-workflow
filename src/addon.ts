@@ -4,6 +4,10 @@ import hooks from "./hooks";
 import { createZToolkit } from "./utils/ztoolkit";
 import type { UpdateWindowData } from "./types";
 import { getPref } from "./utils/prefs";
+import { arXivMerge } from "./modules/arxiv-merge";
+import { arXivUpdate } from "./modules/arxiv-update";
+import { PreferPDF } from "./modules/prefer-pdf";
+import { UpdatePDF } from "./modules/update-pdf";
 
 class Addon {
   public data: {
@@ -39,7 +43,12 @@ class Addon {
       },
     };
     this.hooks = hooks;
-    this.api = {};
+    this.api = {
+      merge: arXivMerge.merge,
+      arXivUpdate: arXivUpdate.update,
+      preferPDF: PreferPDF.prefer,
+      updatePDF: UpdatePDF.update,
+    };
   }
 }
 
