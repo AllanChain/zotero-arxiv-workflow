@@ -43,7 +43,7 @@ jobs:
       - name: Run Build
         run: npm run build
       - name: Upload build result
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: build-result
           path: build
