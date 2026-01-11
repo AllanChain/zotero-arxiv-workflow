@@ -9,6 +9,7 @@ pref-merge-arXivURL =
     .label = 合并条目时，在 URL 字段中保留 arXiv 的 URL
 pref-merge-trashUnannotatedPDF =
     .label = 合并条目时，删除无注释的 arXiv PDF
+pref-merge-reservedKeys= 与正式发表版本合并时，预印本中保持不变的键
 pref-merge-arXiv-warn = 以下两条设置可能导致导出的引用信息包含 arXiv 信息：
 pref-source = arXiv 更新源
 pref-source-doi =

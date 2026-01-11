@@ -9,6 +9,10 @@ pref("__prefsPrefix__.updateSource.dblp", true);
 pref("__prefsPrefix__.updateSource.pubmed", true);
 pref("__prefsPrefix__.updateSource.arXiv", true);
 pref("__prefsPrefix__.mergePreferJournalPDF", true);
+pref(
+  "__prefsPrefix__.merge.reservedKeys",
+  "collections,dateAdded,dateModified,key,tags,relations",
+);
 pref("__prefsPrefix__.merge.arXivExtra", false);
 pref("__prefsPrefix__.merge.arXivURL", false);
 pref("__prefsPrefix__.merge.trashUnannotatedPDF", false);

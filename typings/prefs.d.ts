@@ -18,6 +18,7 @@ declare namespace _ZoteroTypes {
       "updateSource.pubmed": boolean;
       "updateSource.arXiv": boolean;
       "mergePreferJournalPDF": boolean;
+      "merge.reservedKeys": string;
       "merge.arXivExtra": boolean;
       "merge.arXivURL": boolean;
       "merge.trashUnannotatedPDF": boolean;

@@ -4,15 +4,6 @@ import { catchError } from "./error";
 import { getPref } from "../utils/prefs";
 
 export class arXivMerge {
-  static reservedKeys = [
-    "collections",
-    "dateAdded",
-    "dateModified",
-    "key",
-    "tags",
-    "relations",
-  ];
-
   @catchError
   static registerRightClickMenuItem() {
     const menuIcon = `chrome://${config.addonRef}/content/icons/favicon.svg`;
@@ -89,10 +80,14 @@ export class arXivMerge {
     preprintItem.setType(publishedItem.itemTypeID);
     const journalJSON = publishedItem.toJSON();
     const preprintJSON = preprintItem.toJSON();
-    // Use date from the arXiv item
-    arXivMerge.reservedKeys.forEach((field) => {
-      // @ts-expect-error some fields are not listed in zotero-type
-      journalJSON[field] = preprintJSON[field];
+
+    const reservedKeys = getPref("merge.reservedKeys").split(",");
+    ztoolkit.log(reservedKeys);
+    reservedKeys.forEach((field) => {
+      if (Object.hasOwn(preprintJSON, field)) {
+        // @ts-expect-error TypeScript does not treat hasOwn as type guards
+        journalJSON[field] = preprintJSON[field];
+      }
     });
     // Use URL from journal by default, but can be configured to use arXiv URL
     if (getPref("merge.arXivURL")) journalJSON.url = preprintJSON.url;

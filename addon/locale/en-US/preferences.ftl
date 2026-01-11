@@ -9,6 +9,7 @@ pref-merge-arXivURL =
     .label = Use arXiv URL in the URL field when merging
 pref-merge-trashUnannotatedPDF =
     .label = Trash arXiv PDF without annotation when merging
+pref-merge-reservedKeys = Keys that are kept unchanged in the preprint version when merging with published version
 pref-merge-arXiv-warn = The following two settings could add arXiv information in the exported citation:
 pref-source = arXiv Update sources
 pref-source-doi =

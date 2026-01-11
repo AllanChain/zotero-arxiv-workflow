@@ -20,6 +20,7 @@ export type FluentMessageId =
   | 'pref-merge-arXivExtra'
   | 'pref-merge-arXivURL'
   | 'pref-merge-preferJournalPDF'
+  | 'pref-merge-reservedKeys'
   | 'pref-merge-trashUnannotatedPDF'
   | 'pref-source'
   | 'pref-source-arXiv'
