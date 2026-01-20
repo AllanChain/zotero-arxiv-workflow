@@ -386,7 +386,7 @@ class PaperFinder {
     ];
     for (const finder of finders) {
       if (!finder) continue;
-      const result = await finder().catch(ztoolkit.log);
+      const result = await finder().catch(ztoolkit.log.bind(ztoolkit));
       if (result) return result;
     }
   }
