@@ -81,8 +81,11 @@ export class arXivMerge {
     const journalJSON = publishedItem.toJSON();
     const preprintJSON = preprintItem.toJSON();
 
-    const reservedKeys = getPref("merge.reservedKeys").split(",");
-    ztoolkit.log(reservedKeys);
+    ztoolkit.log("merge.reservedKeys", getPref("merge.reservedKeys"));
+    const reservedKeys = (
+      getPref("merge.reservedKeys") ??
+      "collections,dateAdded,dateModified,key,tags,relations"
+    ).split(",");
     reservedKeys.forEach((field) => {
       if (Object.hasOwn(preprintJSON, field)) {
         // @ts-expect-error TypeScript does not treat hasOwn as type guards
