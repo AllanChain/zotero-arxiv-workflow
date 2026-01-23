@@ -468,9 +468,10 @@ class PaperFinder {
       return;
     }
     // Ignore this DBLP entry if it belongs to CoRR. See also #14
-    return !info?.url || info.venue === "CoRR"
+    // Prefer electron edition (ee) which points to the official website instead of DBLP
+    return (!info?.ee && !info?.url) || info.venue === "CoRR"
       ? undefined
-      : { url: info?.url, title: "Published PDF" };
+      : { url: info?.ee || info?.url, title: "Published PDF" };
   }
 
   async pubMed(): Promise<PaperIdentifier | undefined> {
