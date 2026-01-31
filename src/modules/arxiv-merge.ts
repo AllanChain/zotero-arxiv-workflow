@@ -2,6 +2,7 @@ import { config } from "../../package.json";
 import { getString } from "../utils/locale";
 import { catchError } from "./error";
 import { getPref } from "../utils/prefs";
+import { diffWords } from "diff";
 
 export class arXivMerge {
   @catchError
@@ -54,6 +55,72 @@ export class arXivMerge {
     return { preprintItem, publishedItem };
   }
 
+  static async confirmMerge(
+    preprintItem: Zotero.Item,
+    publishedItem: Zotero.Item,
+  ): Promise<boolean> {
+    const loadLock = Zotero.Promise.defer();
+    const answer = Zotero.Promise.defer();
+    const window = Zotero.getMainWindow().openDialog(
+      `chrome://${config.addonRef}/content/merge-confirm.xhtml`,
+      "_blank",
+      "chrome,scroll,centerscreen",
+      { loadLock, answer },
+    )!;
+    await loadLock.promise;
+    window.document.title = getString("merge-confirm-title");
+
+    const diff = diffWords(
+      preprintItem.getDisplayTitle(),
+      publishedItem.getDisplayTitle(),
+      { ignoreCase: true },
+    );
+    const firstElement = window.document.getElementById(
+      `${config.addonRef}-first-item`,
+    );
+    if (firstElement) {
+      for (const part of diff) {
+        if (!part.added && !part.removed)
+          firstElement.appendChild(window.document.createTextNode(part.value));
+        if (part.removed) {
+          const b = window.document.createElement("b");
+          b.textContent = part.value;
+          b.style.color = "var(--accent-red)";
+          firstElement.appendChild(b);
+        }
+      }
+    } else {
+      ztoolkit.log(
+        `Unable to display preprint title. The display element is missing.`,
+      );
+    }
+    const secondElement = window.document.getElementById(
+      `${config.addonRef}-second-item`,
+    );
+    if (secondElement) {
+      for (const part of diff) {
+        if (!part.added && !part.removed)
+          secondElement.appendChild(window.document.createTextNode(part.value));
+        if (part.added) {
+          const b = window.document.createElement("b");
+          b.textContent = part.value;
+          b.style.color = "var(--accent-green)";
+          secondElement.appendChild(b);
+        }
+      }
+    } else {
+      ztoolkit.log(
+        `Unable to display published title. The display element is missing.`,
+      );
+    }
+    ztoolkit.log("wait");
+    const result = await answer.promise;
+    ztoolkit.log("adfadsfafd", result);
+    // @ts-expect-error: promise is untyped
+    return result;
+    // return await answer.promise;
+  }
+
   static async merge(
     preprintItem: Zotero.Item,
     publishedItem: Zotero.Item,
@@ -61,21 +128,11 @@ export class arXivMerge {
   ) {
     if (
       !suppressWarn &&
-      preprintItem.getDisplayTitle() !== publishedItem.getDisplayTitle()
+      preprintItem.getDisplayTitle().toLowerCase() !==
+        publishedItem.getDisplayTitle().toLowerCase() &&
+      !(await arXivMerge.confirmMerge(preprintItem, publishedItem))
     ) {
-      let confirmMsg = getString("merge-confirm", "msg");
-      confirmMsg += `\n- ${preprintItem.getDisplayTitle()}`;
-      confirmMsg += `\n- ${publishedItem.getDisplayTitle()}`;
-      if (
-        !Services.prompt.confirm(
-          // @ts-expect-error window is also a valid argument
-          Zotero.getMainWindow(),
-          getString("merge-confirm"),
-          confirmMsg,
-        )
-      ) {
-        return;
-      }
+      return;
     }
     preprintItem.setType(publishedItem.itemTypeID);
     const journalJSON = publishedItem.toJSON();

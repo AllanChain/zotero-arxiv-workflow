@@ -35,6 +35,7 @@
   },
   "homepage": "https://github.com/AllanChain/zotero-arxiv-workflow#readme",
   "dependencies": {
+    "diff": "^8.0.3",
     "p-queue": "^8.1.1",
     "zotero-plugin-toolkit": "^5.0.1"
   },

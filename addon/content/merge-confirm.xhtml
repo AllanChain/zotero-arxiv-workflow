@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://zotero-platform/content/zotero.css"?>
+<dialog
+  xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+  xmlns:html="http://www.w3.org/1999/xhtml"
+  buttons="accept,cancel"
+  width="500"
+>
+  <script>
+    window.addEventListener("load", function () {
+      window.arguments[0].loadLock.resolve();
+      document.addEventListener("dialogaccept", function (event) {
+        window.arguments[0].answer.resolve(true);
+      });
+      document.addEventListener("dialogcancel", function (event) {
+        window.arguments[0].answer.resolve(false);
+      });
+    });
+  </script>
+  <linkset>
+    <html:link rel="localization" href="__addonRef__-addon.ftl" />
+  </linkset>
+  <vbox>
+    <html:p align="center" data-l10n-id="merge-confirm-message"></html:p>
+    <html:ul>
+      <html:li id="__addonRef__-first-item"></html:li>
+      <html:li id="__addonRef__-second-item"></html:li>
+    </html:ul>
+  </vbox>
+</dialog>

@@ -4,8 +4,8 @@ menuitem-update = Update arXiv paper
 menuitem-update-pdf = Download latest PDF
 prefs-title = arXiv Workflow
 
-merge-confirm = Merge Items
-    .msg = Are you sure to merge items with different title?
+merge-confirm-title = Merge Items
+merge-confirm-message = Are you sure to merge items with different title?
 
 update-window = Update arXiv Paper
   .h1-title = arXiv Update Queue

@@ -4,8 +4,8 @@ menuitem-update = 更新 arXiv 文章
 menuitem-update-pdf = 下载最新 PDF
 prefs-title = arXiv 工作流
 
-merge-confirm = 合并条目
-    .msg = 确定要合并这两个标题不同的条目吗？
+merge-confirm-title = 合并条目
+merge-confirm-message = 确定要合并这两个标题不同的条目吗？
 
 update-window = arXiv 更新
   .h1-title = arXiv 更新队列
