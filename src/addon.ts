@@ -28,7 +28,12 @@ class Addon {
   // Lifecycle hooks
   public hooks: typeof hooks;
   // APIs
-  public api: object;
+  public api = {
+    merge: arXivMerge.merge,
+    arXivUpdate: arXivUpdate.update,
+    preferPDF: PreferPDF.prefer,
+    updatePDF: UpdatePDF.update,
+  };
 
   constructor() {
     this.data = {
@@ -43,12 +48,6 @@ class Addon {
       },
     };
     this.hooks = hooks;
-    this.api = {
-      merge: arXivMerge.merge,
-      arXivUpdate: arXivUpdate.update,
-      preferPDF: PreferPDF.prefer,
-      updatePDF: UpdatePDF.update,
-    };
   }
 }
 

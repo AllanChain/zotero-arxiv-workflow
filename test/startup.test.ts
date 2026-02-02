@@ -1,5 +1,6 @@
 import { assert } from "chai";
 import { config } from "../package.json";
+import type Addon from "../src/addon";
 
 describe("startup", function () {
   it("should have plugin instance and prefs defined", function () {
@@ -13,7 +14,7 @@ describe("startup", function () {
   });
 
   it("should expose public API", function () {
-    const plugin = Zotero[config.addonInstance];
+    const plugin = Zotero[config.addonInstance] as Addon;
     assert.isDefined(plugin.api.arXivUpdate);
     assert.isDefined(plugin.api.merge);
     assert.isDefined(plugin.api.preferPDF);
