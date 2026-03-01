@@ -1,7 +1,11 @@
-menuitem-merge = 合并 arXiv
-menuitem-prefer = 优先打开此 PDF
-menuitem-update = 更新 arXiv 文章
-menuitem-update-pdf = 下载最新 PDF
+menuitem-merge =
+  .label = 合并 arXiv
+menuitem-prefer =
+  .label =优先打开此 PDF
+menuitem-update =
+  .label = 更新 arXiv 文章
+menuitem-update-pdf =
+  .label = 下载最新 PDF
 prefs-title = arXiv 工作流
 
 merge-confirm-title = 合并条目

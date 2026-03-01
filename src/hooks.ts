@@ -1,3 +1,4 @@
+import { config } from "../package.json";
 import { arXivMerge } from "./modules/arxiv-merge";
 import { arXivUpdate } from "./modules/arxiv-update";
 import { PreferPDF } from "./modules/prefer-pdf";
@@ -30,6 +31,9 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   addon.data.ztoolkit = createZToolkit();
 
   Preferences.registerPreferences();
+
+  win.MozXULElement.insertFTLIfNeeded(`${config.addonRef}-addon.ftl`);
+
   if (getPref("features.arXivMerge")) arXivMerge.registerRightClickMenuItem();
   if (getPref("features.preferPDF")) PreferPDF.registerRightClickMenuItem();
   if (getPref("features.updatePDF")) UpdatePDF.registerRightClickMenuItem();

@@ -82,29 +82,35 @@ export class arXivUpdate {
 
   @catchError
   static registerRightClickMenuItem() {
-    // item menuitem with icon
-    ztoolkit.Menu.register("item", {
-      tag: "menuitem",
-      id: "zotero-arxiv-workflow-update",
-      label: getString("menuitem-update"),
-      icon: arXivUpdate.menuIcon,
-      getVisibility: () => {
-        const isKnownPreprintItem = Zotero.getActiveZoteroPane()
-          .getSelectedItems()
-          .map((item) => {
-            if (item.itemType !== "preprint") return false;
-            const arXivURL = item.getField("url");
-            const urlHost = new URL(arXivURL).hostname;
-            return Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost);
-          });
-        if (getPref("update.alwaysShowButton"))
-          return isKnownPreprintItem.some(Boolean);
-        else return isKnownPreprintItem.every(Boolean);
-      },
-      commandListener: async () => {
-        const preprintItems = Zotero.getActiveZoteroPane().getSelectedItems();
-        arXivUpdate.update(preprintItems);
-      },
+    Zotero.MenuManager.registerMenu({
+      menuID: `${config.addonRef}-update`,
+      pluginID: config.addonID,
+      target: "main/library/item",
+      menus: [
+        {
+          menuType: "menuitem",
+          l10nID: `${config.addonRef}-menuitem-update`,
+          icon: arXivUpdate.menuIcon,
+          onCommand: async () => {
+            const preprintItems =
+              Zotero.getActiveZoteroPane().getSelectedItems();
+            arXivUpdate.update(preprintItems);
+          },
+          onShowing: (ev, { setVisible }) => {
+            const isKnownPreprintItem = Zotero.getActiveZoteroPane()
+              .getSelectedItems()
+              .map((item) => {
+                if (item.itemType !== "preprint") return false;
+                const arXivURL = item.getField("url");
+                const urlHost = new URL(arXivURL).hostname;
+                return Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost);
+              });
+            if (getPref("update.alwaysShowButton"))
+              setVisible(isKnownPreprintItem.some(Boolean));
+            else setVisible(isKnownPreprintItem.every(Boolean));
+          },
+        },
+      ],
     });
   }
 
@@ -281,7 +287,6 @@ export class arXivUpdate {
           const paperId = addon.data.arXivUpdate.tableData[selectedRow].id;
           Zotero.getMainWindow()?.ZoteroPane.selectItem(paperId);
         },
-        // @ts-expect-error Wrong type in ztoolkit
         onActivate: (_, items) => {
           const paperId = addon.data.arXivUpdate.tableData[items[0]].id;
           const win = Zotero.getMainWindow();

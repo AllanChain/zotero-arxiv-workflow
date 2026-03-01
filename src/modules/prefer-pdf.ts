@@ -6,22 +6,26 @@ export class PreferPDF {
   @catchError
   static registerRightClickMenuItem() {
     const menuIcon = `chrome://${config.addonRef}/content/icons/favicon.svg`;
-    ztoolkit.Menu.register("item", {
-      tag: "menuitem",
-      id: "zotero-arxiv-workflow-prefer",
-      label: getString("menuitem-prefer"),
-      getVisibility: () => {
-        const items = Zotero.getActiveZoteroPane().getSelectedItems();
-        if (items.length !== 1) return false;
-        if (!items[0].isPDFAttachment()) return false;
-        return true;
-      },
-      commandListener: async (ev) => {
-        const selectedAttachment =
-          Zotero.getActiveZoteroPane().getSelectedItems()[0];
-        PreferPDF.prefer(selectedAttachment);
-      },
-      icon: menuIcon,
+    Zotero.MenuManager.registerMenu({
+      menuID: `${config.addonRef}-prefer`,
+      pluginID: config.addonID,
+      target: "main/library/item",
+      menus: [
+        {
+          menuType: "menuitem",
+          l10nID: `${config.addonRef}-menuitem-prefer`,
+          icon: menuIcon,
+          onCommand: async () => {
+            const selectedAttachment =
+              Zotero.getActiveZoteroPane().getSelectedItems()[0];
+            PreferPDF.prefer(selectedAttachment);
+          },
+          onShowing: (ev, { setVisible }) => {
+            const items = Zotero.getActiveZoteroPane().getSelectedItems();
+            setVisible(items.length === 1 && items[0].isPDFAttachment());
+          },
+        },
+      ],
     });
   }
 
