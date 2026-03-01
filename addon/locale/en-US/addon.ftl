@@ -1,7 +1,11 @@
-menuitem-merge = Merge arXiv
-menuitem-prefer = Prefer this PDF
-menuitem-update = Update arXiv paper
-menuitem-update-pdf = Download latest PDF
+menuitem-merge =
+  .label = Merge arXiv
+menuitem-prefer =
+  .label = Prefer this PDF
+menuitem-update =
+  .label = Update arXiv paper
+menuitem-update-pdf =
+  .label = Download latest PDF
 prefs-title = arXiv Workflow
 
 merge-confirm-title = Merge Items

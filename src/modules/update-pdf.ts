@@ -7,23 +7,28 @@ export class UpdatePDF {
 
   @catchError
   static registerRightClickMenuItem() {
-    // item menuitem with icon
-    ztoolkit.Menu.register("item", {
-      tag: "menuitem",
-      id: "zotero-arxiv-workflow-update-pdf",
-      label: getString("menuitem-update-pdf"),
-      icon: UpdatePDF.menuIcon,
-      getVisibility: () => {
-        const items = Zotero.getActiveZoteroPane().getSelectedItems();
-        if (items.length !== 1) return false;
-        const publishedItem = items[0];
-        if (publishedItem.itemType !== "journalArticle") return false;
-        return true;
-      },
-      commandListener: async (ev) => {
-        const journalItem = Zotero.getActiveZoteroPane().getSelectedItems()[0];
-        UpdatePDF.update(journalItem);
-      },
+    Zotero.MenuManager.registerMenu({
+      menuID: `${config.addonRef}-update-pdf`,
+      pluginID: config.addonID,
+      target: "main/library/item",
+      menus: [
+        {
+          menuType: "menuitem",
+          l10nID: `${config.addonRef}-menuitem-update-pdf`,
+          icon: UpdatePDF.menuIcon,
+          onCommand: async () => {
+            const journalItem =
+              Zotero.getActiveZoteroPane().getSelectedItems()[0];
+            UpdatePDF.update(journalItem);
+          },
+          onShowing: (ev, { setVisible }) => {
+            const items = Zotero.getActiveZoteroPane().getSelectedItems();
+            setVisible(
+              items.length === 1 && items[0].itemType === "journalArticle",
+            );
+          },
+        },
+      ],
     });
   }
   static async update(journalItem: Zotero.Item) {

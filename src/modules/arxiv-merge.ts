@@ -8,35 +8,55 @@ export class arXivMerge {
   @catchError
   static registerRightClickMenuItem() {
     const menuIcon = `chrome://${config.addonRef}/content/icons/favicon.svg`;
-    // item menuitem with icon
-    ztoolkit.Menu.register("item", {
-      tag: "menuitem",
-      id: "zotero-arxiv-workflow-merge",
-      label: getString("menuitem-merge"),
-      icon: menuIcon,
-      getVisibility: () => {
-        const items = Zotero.getActiveZoteroPane().getSelectedItems();
-        if (items.length !== 2) return false;
-        const { preprintItem, publishedItem } = arXivMerge.identifyItems(items);
-        if (preprintItem === undefined || publishedItem === undefined)
-          return false;
-        return true;
-      },
-      commandListener: async (ev) => {
-        const items = Zotero.getActiveZoteroPane().getSelectedItems();
-        if (items.length !== 2) {
-          // @ts-expect-error null is also a valid argument
-          Zotero.alert(null, "Impossible", "Only supports merging 2 items.");
-          return;
-        }
-        const { preprintItem, publishedItem } = arXivMerge.identifyItems(items);
-        if (preprintItem === undefined || publishedItem === undefined) {
-          // @ts-expect-error null is also a valid argument
-          Zotero.alert(null, "Impossible", "Select one arXiv and one journal");
-          return;
-        }
-        await this.merge(preprintItem, publishedItem);
-      },
+    Zotero.MenuManager.registerMenu({
+      menuID: `${config.addonRef}-merge`,
+      pluginID: config.addonID,
+      target: "main/library/item",
+      menus: [
+        {
+          menuType: "menuitem",
+          l10nID: `${config.addonRef}-menuitem-merge`,
+          icon: menuIcon,
+          onCommand: async (ev) => {
+            const items = Zotero.getActiveZoteroPane().getSelectedItems();
+            if (items.length !== 2) {
+              Zotero.alert(
+                // @ts-expect-error null is also a valid argument
+                null,
+                "Impossible",
+                "Only supports merging 2 items.",
+              );
+              return;
+            }
+            const { preprintItem, publishedItem } =
+              arXivMerge.identifyItems(items);
+            if (preprintItem === undefined || publishedItem === undefined) {
+              Zotero.alert(
+                // @ts-expect-error null is also a valid argument
+                null,
+                "Impossible",
+                "Select one arXiv and one journal",
+              );
+              return;
+            }
+            await this.merge(preprintItem, publishedItem);
+          },
+          onShowing: (ev, { setVisible }) => {
+            const items = Zotero.getActiveZoteroPane().getSelectedItems();
+            if (items.length !== 2) {
+              setVisible(false);
+              return;
+            }
+            const { preprintItem, publishedItem } =
+              arXivMerge.identifyItems(items);
+            if (preprintItem === undefined || publishedItem === undefined) {
+              setVisible(false);
+              return;
+            }
+            setVisible(true);
+          },
+        },
+      ],
     });
   }
 
