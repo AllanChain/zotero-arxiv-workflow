@@ -1,7 +1,6 @@
 import { assert } from "chai";
-import { config } from "../package.json";
 import type Addon from "../src/addon";
-import { getPlugin, getAllItems } from "./helpers";
+import { clearLibrary, getAllItems, getPlugin } from "./helpers";
 
 describe("merge", function () {
   let plugin: Addon;
@@ -70,8 +69,7 @@ describe("merge", function () {
   });
 
   after(async function () {
-    await Promise.all((await getAllItems()).map((item) => item.eraseTx()));
-    await Zotero.Items.emptyTrash(Zotero.Libraries.userLibraryID);
+    await clearLibrary();
   });
 
   it("should be able to merge items", async function () {
