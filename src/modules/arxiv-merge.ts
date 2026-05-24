@@ -3,60 +3,44 @@ import { getString } from "../utils/locale";
 import { catchError } from "./error";
 import { getPref } from "../utils/prefs";
 import { diffWords } from "diff";
+import { MenuHelper } from "../utils/menu";
+import { PreferPDF } from "./prefer-pdf";
 
 export class arXivMerge {
-  @catchError
   static registerRightClickMenuItem() {
-    const menuIcon = `chrome://${config.addonRef}/content/icons/favicon.svg`;
-    Zotero.MenuManager.registerMenu({
-      menuID: `${config.addonRef}-merge`,
-      pluginID: config.addonID,
-      target: "main/library/item",
-      menus: [
-        {
-          menuType: "menuitem",
-          l10nID: `${config.addonRef}-menuitem-merge`,
-          icon: menuIcon,
-          onCommand: async (ev) => {
-            const items = Zotero.getActiveZoteroPane().getSelectedItems();
-            if (items.length !== 2) {
-              Zotero.alert(
-                // @ts-expect-error null is also a valid argument
-                null,
-                "Impossible",
-                "Only supports merging 2 items.",
-              );
-              return;
-            }
-            const { preprintItem, publishedItem } =
-              arXivMerge.identifyItems(items);
-            if (preprintItem === undefined || publishedItem === undefined) {
-              Zotero.alert(
-                // @ts-expect-error null is also a valid argument
-                null,
-                "Impossible",
-                "Select one arXiv and one journal",
-              );
-              return;
-            }
-            await this.merge(preprintItem, publishedItem);
-          },
-          onShowing: (ev, { setVisible }) => {
-            const items = Zotero.getActiveZoteroPane().getSelectedItems();
-            if (items.length !== 2) {
-              setVisible(false);
-              return;
-            }
-            const { preprintItem, publishedItem } =
-              arXivMerge.identifyItems(items);
-            if (preprintItem === undefined || publishedItem === undefined) {
-              setVisible(false);
-              return;
-            }
-            setVisible(true);
-          },
-        },
-      ],
+    MenuHelper.register({
+      id: "merge",
+      l10nID: "merge",
+      onCommand: async (items) => {
+        if (items.length !== 2) {
+          Zotero.alert(
+            // @ts-expect-error null is also a valid argument
+            null,
+            "Impossible",
+            "Only supports merging 2 items.",
+          );
+          return;
+        }
+        const { preprintItem, publishedItem } = arXivMerge.identifyItems(items);
+        if (preprintItem === undefined || publishedItem === undefined) {
+          Zotero.alert(
+            // @ts-expect-error null is also a valid argument
+            null,
+            "Impossible",
+            "Select one arXiv and one journal",
+          );
+          return;
+        }
+        await this.merge(preprintItem, publishedItem);
+      },
+      onShowing: (setVisible, items) => {
+        if (items.length !== 2) {
+          setVisible(false);
+          return;
+        }
+        const { preprintItem, publishedItem } = arXivMerge.identifyItems(items);
+        setVisible(preprintItem !== undefined && publishedItem !== undefined);
+      },
     });
   }
 
@@ -86,7 +70,11 @@ export class arXivMerge {
       "_blank",
       "chrome,scroll,centerscreen",
       { loadLock, answer },
-    )!;
+    );
+    if (!window) {
+      ztoolkit.log("Failed to open merge confirmation dialog");
+      return false;
+    }
     await loadLock.promise;
     window.document.title = getString("merge-confirm-title");
 
@@ -238,28 +226,22 @@ export class arXivMerge {
         await Zotero.Items.trashTx(attachmentID);
       }
     }
-    // Set prefered PDF
-    if (getPref("mergePreferJournalPDF")) {
-      let oldestPDFDate = new Date();
-      for (const attachmentID of preprintItem.getAttachments()) {
-        const attachment = await Zotero.Items.getAsync(attachmentID);
-        const attachmentDate = new Date(attachment.dateAdded);
-        if (attachmentDate.getTime() < oldestPDFDate.getTime()) {
-          oldestPDFDate = attachmentDate;
-        }
+    let journalPDFAttachment: Zotero.Item | undefined;
+    for (const attachmentID of publishedItem.getAttachments()) {
+      const attachment = await Zotero.Items.getAsync(attachmentID);
+      if (attachment.isPDFAttachment()) {
+        journalPDFAttachment = attachment;
+        break;
       }
-      oldestPDFDate = new Date(oldestPDFDate.getTime() - 100);
-      for (const attachmentID of publishedItem.getAttachments()) {
-        const attachment = await Zotero.Items.getAsync(attachmentID);
-        if (attachment.isPDFAttachment()) {
-          attachment.dateAdded = oldestPDFDate.toISOString();
-          attachment.saveTx();
-        }
-      }
+    }
+
+    await Zotero.Items.merge(preprintItem, [publishedItem]);
+    preprintItem.clearBestAttachmentState();
+
+    if (getPref("mergePreferJournalPDF") && journalPDFAttachment) {
+      await PreferPDF.prefer(journalPDFAttachment);
     } else {
       await Zotero.Promise.delay(0); // magic sleep
     }
-    await Zotero.Items.merge(preprintItem, [publishedItem]);
-    preprintItem.clearBestAttachmentState();
   }
 }

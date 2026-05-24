@@ -1,31 +1,25 @@
 import { config } from "../../package.json";
 import { getString } from "../utils/locale";
 import { catchError } from "./error";
+import { MenuHelper } from "../utils/menu";
 
 export class PreferPDF {
-  @catchError
   static registerRightClickMenuItem() {
-    const menuIcon = `chrome://${config.addonRef}/content/icons/favicon.svg`;
-    Zotero.MenuManager.registerMenu({
-      menuID: `${config.addonRef}-prefer`,
-      pluginID: config.addonID,
-      target: "main/library/item",
-      menus: [
-        {
-          menuType: "menuitem",
-          l10nID: `${config.addonRef}-menuitem-prefer`,
-          icon: menuIcon,
-          onCommand: async () => {
-            const selectedAttachment =
-              Zotero.getActiveZoteroPane().getSelectedItems()[0];
-            PreferPDF.prefer(selectedAttachment);
-          },
-          onShowing: (ev, { setVisible }) => {
-            const items = Zotero.getActiveZoteroPane().getSelectedItems();
-            setVisible(items.length === 1 && items[0].isPDFAttachment());
-          },
-        },
-      ],
+    MenuHelper.register({
+      id: "prefer",
+      l10nID: "prefer",
+      onCommand: async (items) => {
+        if (items.length === 1 && items[0].isPDFAttachment()) {
+          await PreferPDF.prefer(items[0]);
+        }
+      },
+      onShowing: (setVisible, items) => {
+        setVisible(
+          items.length === 1 &&
+            items[0].isPDFAttachment() &&
+            !!items[0].parentItem,
+        );
+      },
     });
   }
 
@@ -36,7 +30,11 @@ export class PreferPDF {
    * - If it's the first-added PDF
    */
   static async prefer(selectedAttachment: Zotero.Item) {
-    const item = selectedAttachment.parentItem!;
+    const item = selectedAttachment.parentItem;
+    if (!item) {
+      ztoolkit.log("No parent item found for attachment");
+      return;
+    }
     let oldestPDFDate = new Date();
     for (const attachmentID of item.getAttachments()) {
       const attachment = await Zotero.Items.getAsync(attachmentID);

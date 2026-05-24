@@ -4,6 +4,7 @@ import { getPref } from "../utils/prefs";
 import { arXivMerge } from "./arxiv-merge";
 import { catchError } from "./error";
 import { UpdateStatus, UpdateTableData } from "../types";
+import { MenuHelper } from "../utils/menu";
 
 const KNOWN_PREPRINT_SERVERS = {
   arxiv: "arxiv.org",
@@ -12,6 +13,26 @@ const KNOWN_PREPRINT_SERVERS = {
   chemrxiv: "chemrxiv.org",
   psyarxiv: "osf.io",
 };
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit & { timeout?: number },
+): Promise<Response> {
+  const timeout = init?.timeout ?? 10000;
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+}
 
 interface PaperIdentifier {
   doi?: string;
@@ -59,12 +80,26 @@ async function createItemByZotero(
     translate = new Zotero.Translate.Search();
     translate.setIdentifier({ DOI: paper.doi });
     const translators = await translate.getTranslators();
+    if (!translators || translators.length === 0) {
+      ztoolkit.log(`No translator found for DOI: ${paper.doi}`);
+      return false;
+    }
     translate.setTranslator(translators);
   } else if (paper.url) {
     translate = new Zotero.Translate.Web();
     const doc = await Zotero.HTTP.processDocuments(paper.url, (doc) => doc);
+    if (!doc || doc.length === 0) {
+      ztoolkit.log(
+        `processDocuments returned no documents for URL: ${paper.url}`,
+      );
+      return false;
+    }
     translate.setDocument(doc[0]);
     const translators = await translate.getTranslators();
+    if (!translators || translators.length === 0) {
+      ztoolkit.log(`No translator found for URL: ${paper.url}`);
+      return false;
+    }
     translate.setTranslator(translators);
   }
   const libraryID = Zotero.getActiveZoteroPane().getSelectedLibraryID();
@@ -73,44 +108,37 @@ async function createItemByZotero(
     collections,
     saveAttachments: false, // we will do it later
   });
-  if (items.length === 0) return false;
+  if (!items || items.length === 0) return false;
   return items[0];
 }
 
 export class arXivUpdate {
   static menuIcon = `chrome://${config.addonRef}/content/icons/favicon.svg`;
 
-  @catchError
   static registerRightClickMenuItem() {
-    Zotero.MenuManager.registerMenu({
-      menuID: `${config.addonRef}-update`,
-      pluginID: config.addonID,
-      target: "main/library/item",
-      menus: [
-        {
-          menuType: "menuitem",
-          l10nID: `${config.addonRef}-menuitem-update`,
-          icon: arXivUpdate.menuIcon,
-          onCommand: async () => {
-            const preprintItems =
-              Zotero.getActiveZoteroPane().getSelectedItems();
-            arXivUpdate.update(preprintItems);
-          },
-          onShowing: (ev, { setVisible }) => {
-            const isKnownPreprintItem = Zotero.getActiveZoteroPane()
-              .getSelectedItems()
-              .map((item) => {
-                if (item.itemType !== "preprint") return false;
-                const arXivURL = item.getField("url");
-                const urlHost = new URL(arXivURL).hostname;
-                return Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost);
-              });
-            if (getPref("update.alwaysShowButton"))
-              setVisible(isKnownPreprintItem.some(Boolean));
-            else setVisible(isKnownPreprintItem.every(Boolean));
-          },
-        },
-      ],
+    MenuHelper.register({
+      id: "update",
+      l10nID: "update",
+      onCommand: async (items) => {
+        arXivUpdate.update(items);
+      },
+      onShowing: (setVisible, items) => {
+        const isKnownPreprintItem = items.map((item) => {
+          if (item.itemType !== "preprint") return false;
+          const arXivURL = item.getField("url");
+          try {
+            const urlHost = new URL(arXivURL).hostname;
+            return Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost);
+          } catch {
+            return false;
+          }
+        });
+        if (getPref("update.alwaysShowButton")) {
+          setVisible(isKnownPreprintItem.some(Boolean));
+        } else {
+          setVisible(isKnownPreprintItem.every(Boolean));
+        }
+      },
     });
   }
 
@@ -155,7 +183,11 @@ export class arXivUpdate {
       reportProgress("downloading-metadata");
       const collection = Zotero.getActiveZoteroPane().getSelectedCollection();
       let collections: number[] = [];
-      if (collection) {
+      if (
+        collection &&
+        typeof collection.isCollection === "function" &&
+        collection.isCollection()
+      ) {
         collections = [collection.id];
       }
       const journalItem = await createItemByZotero(paper, collections);
@@ -168,10 +200,13 @@ export class arXivUpdate {
         Zotero.Attachments.canFindPDFForItem(journalItem)
       ) {
         reportProgress("downloading-pdf");
+        const options =
+          journalItem.itemType === "preprint"
+            ? undefined
+            : { methods: ["doi"] as any };
         const attachment = await Zotero.Attachments.addAvailableFile(
           journalItem,
-          // Only download from publisher
-          { methods: ["doi"] },
+          options,
         );
         if (attachment) {
           attachment.setField("title", paper.title);
@@ -399,7 +434,7 @@ class PaperFinder {
   async relatedDOI(): Promise<PaperIdentifier | undefined> {
     const urlHost = new URL(this.preprintURL).hostname;
     if (urlHost === KNOWN_PREPRINT_SERVERS.arxiv) {
-      const htmlResp = await fetch(this.preprintURL);
+      const htmlResp = await fetchWithTimeout(this.preprintURL);
       const htmlContent = await htmlResp.text();
       const doiMatch = htmlContent.match(/data-doi="(?<doi>.*?)"/);
       const doi = doiMatch?.groups?.doi;
@@ -408,23 +443,25 @@ class PaperFinder {
       urlHost === KNOWN_PREPRINT_SERVERS.biorxiv ||
       urlHost === KNOWN_PREPRINT_SERVERS.medrxiv
     ) {
-      const arxivID = this.preprintURL.match(/\/(?<arxivID>[\d./]+)v\d+$/)
-        ?.groups?.arxivID;
+      const arxivID = this.preprintURL.match(
+        /\/(?<arxivID>10\.\d{4,9}\/[\d.]+)(?:v\d+)?(?:\..*)?\/?$/,
+      )?.groups?.arxivID;
       if (!arxivID) return undefined;
       const apiURL =
         urlHost === KNOWN_PREPRINT_SERVERS.biorxiv
           ? `https://api.biorxiv.org/details/biorxiv/${arxivID}`
           : `https://api.medrxiv.org/details/medrxiv/${arxivID}`;
-      const jsonResp = await fetch(apiURL);
+      const jsonResp = await fetchWithTimeout(apiURL);
       const json = (await jsonResp.json()) as any;
       const doi = json.collection?.[0]?.published as string | undefined;
       return doi ? { doi, title: "Published PDF" } : undefined;
     } else if (urlHost == KNOWN_PREPRINT_SERVERS.chemrxiv) {
-      const arxivID = this.preprintURL.match(/\/(?<arxivID>[\da-f]+)$/)?.groups
-        ?.arxivID;
+      const arxivID = this.preprintURL.match(
+        /\/(?<arxivID>[\da-f]{24,})(?:v\d+)?\/?$/,
+      )?.groups?.arxivID;
       if (!arxivID) return undefined;
       const apiURL = `https://chemrxiv.org/engage/chemrxiv/public-api/v1/items/${arxivID}`;
-      const jsonResp = await fetch(apiURL);
+      const jsonResp = await fetchWithTimeout(apiURL);
       const json = (await jsonResp.json()) as any;
       const doi = json.vor?.vorDoi as string | undefined;
       return doi ? { doi, title: "Published PDF" } : undefined;
@@ -444,7 +481,7 @@ class PaperFinder {
     const arXivID = idMatch.groups.arxiv;
     const semanticAPI = "https://api.semanticscholar.org/graph/v1/paper";
     const semanticURL = `${semanticAPI}/ARXIV:${arXivID}?fields=externalIds`;
-    const jsonResp = await fetch(semanticURL);
+    const jsonResp = await fetchWithTimeout(semanticURL);
     const semanticJSON = (await jsonResp.json()) as any;
     const doi = semanticJSON.externalIds?.DOI as string | undefined;
     // Retrun undefined if the DOI is an arXiv DOI
@@ -459,7 +496,7 @@ class PaperFinder {
     if (urlHost !== KNOWN_PREPRINT_SERVERS.arxiv) return undefined;
     const dblpAPI = "https://dblp.org/search/publ/api";
     const dblpURL = `${dblpAPI}?q=${encodeURIComponent(this.title)}&format=json`;
-    const jsonResp = await fetch(dblpURL);
+    const jsonResp = await fetchWithTimeout(dblpURL);
     const json = (await jsonResp.json()) as any;
     const info = json?.result?.hits?.hit?.[0]?.info;
     // Remove final `.` in title (idk why dblp has this)
@@ -474,23 +511,34 @@ class PaperFinder {
     }
     // Ignore this DBLP entry if it belongs to CoRR. See also #14
     // Prefer electron edition (ee) which points to the official website instead of DBLP
-    return (!info?.ee && !info?.url) || info.venue === "CoRR"
-      ? undefined
-      : { url: info?.ee || info?.url, title: "Published PDF" };
+    if ((!info?.ee && !info?.url) || info.venue === "CoRR") {
+      return undefined;
+    }
+    const ee = Array.isArray(info?.ee) ? info.ee[0] : info?.ee;
+    const url = ee || info?.url;
+    if (url) {
+      const doiMatch = url.match(
+        /doi\.org\/(?<doi>10\.\d{4,9}\/[-._;()/:a-zA-Z0-9]+)/i,
+      );
+      if (doiMatch?.groups?.doi) {
+        return { doi: doiMatch.groups.doi, title: "Published PDF" };
+      }
+    }
+    return { url, title: "Published PDF" };
   }
 
   async pubMed(): Promise<PaperIdentifier | undefined> {
     const pubMedSearchAPI =
       "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed";
     const pubMedSearchURL = `${pubMedSearchAPI}&term=${encodeURIComponent(this.title)}&retmode=json`;
-    const searchJsonResp = await fetch(pubMedSearchURL);
+    const searchJsonResp = await fetchWithTimeout(pubMedSearchURL);
     const searchJson = (await searchJsonResp.json()) as any;
     const paperId = searchJson?.esearchresult?.idlist?.[0];
     if (!paperId) return undefined;
     const pubMedPaperAPI =
       "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed";
     const pubMedPaperURL = `${pubMedPaperAPI}&id=${paperId}&retmode=json`;
-    const paperJsonResp = await fetch(pubMedPaperURL);
+    const paperJsonResp = await fetchWithTimeout(pubMedPaperURL);
     const paperJson = (await paperJsonResp.json()) as any;
     // Remove final `.` in title (idk why PubMed has this)
     const info = paperJson?.result?.[paperId];
@@ -520,13 +568,20 @@ class PaperFinder {
     // We skip updating if we fail to extract version, but we will try to
     // download a version if there is no local PDF.
     let hasPDF = false;
-    let localVersion = 0;
+    const urlVersionMatch = this.preprintURL.match(
+      /(?:abs|pdf)\/[\d.]+v(?<version>\d+)/i,
+    );
+    const urlVersion = urlVersionMatch
+      ? parseInt(urlVersionMatch.groups!.version, 10)
+      : 0;
+    let localVersion = urlVersion;
     for (const attachmentID of this.item.getAttachments()) {
       const attachment = await Zotero.Items.getAsync(attachmentID);
       if (!attachment.isPDFAttachment()) continue;
       hasPDF = true;
       const fullText = await Zotero.PDFWorker.getFullText(attachmentID, 1);
-      const match = fullText.text.match(/arXiv:[\d.]+v(\d+)/);
+      const text = fullText?.text || "";
+      const match = text.match(/arXiv:[\d.]+v(\d+)/);
       if (!match) continue;
       const currentPDFVersion = parseInt(match[1], 10);
       if (currentPDFVersion > localVersion) {
@@ -535,7 +590,7 @@ class PaperFinder {
     }
     ztoolkit.log(`Current arXiv version: ${localVersion}`);
     if (hasPDF && localVersion === 0) return undefined;
-    const htmlResp = await fetch(this.item.getField("url"));
+    const htmlResp = await fetchWithTimeout(this.item.getField("url"));
     const htmlContent = await htmlResp.text();
     const match = htmlContent.match(/<strong>\[v(\d+)\]<\/strong>/);
     if (!match) return undefined;
