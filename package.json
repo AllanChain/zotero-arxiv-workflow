@@ -37,25 +37,25 @@
   "dependencies": {
     "diff": "^9.0.0",
     "p-queue": "^8.1.1",
-    "zotero-plugin-toolkit": "^5.1.2"
+    "zotero-plugin-toolkit": "^5.1.4"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.0.2",
-    "@commitlint/config-conventional": "^21.0.2",
+    "@commitlint/cli": "^21.2.0",
+    "@commitlint/config-conventional": "^21.2.0",
     "@eslint/js": "^10.0.0",
     "@types/chai": "^5.2.3",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^24.12.4",
+    "@types/node": "^24.13.2",
     "@zotero-plugin/eslint-config": "^0.6.9",
     "chai": "^6.2.2",
-    "eslint": "^10.4.1",
+    "eslint": "^10.6.0",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.7",
+    "lint-staged": "^17.0.8",
     "mocha": "^11.7.6",
-    "prettier": "^3.8.3",
+    "prettier": "^3.9.4",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.60.0",
-    "zotero-plugin-scaffold": "^0.8.6",
+    "typescript-eslint": "^8.62.1",
+    "zotero-plugin-scaffold": "^0.8.7",
     "zotero-types": "^4.1.2"
   },
   "prettier": {
@@ -73,5 +73,5 @@
       }
     ]
   },
-  "packageManager": "npm@11.16.0+sha512.03be172fc3b199c7a06433163e459be5b110a6983c1dd6305b7ac10f6b0fa12e1440755a8df6b1064ab2ccb789df0474919fb9c684e322dc57685ede21752ccb"
+  "packageManager": "npm@11.18.0+sha512.4faecce0be70366d1c67b1012c4adc1246354a6cc45bf589f92003073b05518d547403df1475c542d67a4845e22b4fafcd7cac0af02c7a96cc6814f09eb003fb"
 }
