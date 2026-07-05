@@ -20,11 +20,7 @@ interface PaperIdentifier {
 }
 
 type SimpleUpdateStatus =
-  | "pending"
-  | "processing"
-  | "up-to-date"
-  | "updated"
-  | "error";
+  "pending" | "processing" | "up-to-date" | "updated" | "error";
 type ReportProgress = (status: UpdateStatus, msg?: string) => void;
 
 function simplifyUpdateStatus(status: UpdateStatus): SimpleUpdateStatus {

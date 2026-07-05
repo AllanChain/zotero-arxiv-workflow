@@ -148,6 +148,7 @@ Therefore, to make Zotero perfer a specific PDF, this plugin
 
 1. sets URL field of the PDF attachment the same as that of parent item
 2. sets the `dateAdded` field to be the oldest among all PDFs of parent item
+
 </details>
 
 <details>
