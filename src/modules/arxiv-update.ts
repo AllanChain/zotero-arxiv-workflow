@@ -46,6 +46,24 @@ function matchTitle(base: string, target: any): boolean {
   return base.toLowerCase().trim() === target.toLowerCase().trim();
 }
 
+// Abort discovery requests after a while so that a slow or rate-limited
+// service does not hang the update queue indefinitely. The plugin sandbox
+// exposes fetch but not AbortController/AbortSignal, so rely on Zotero.HTTP
+// and its native timeout option instead of a fetch signal. errorDelayMax: 0
+// disables Zotero's own retry backoff on 429/5xx responses, which would
+// otherwise keep a request alive for up to an hour.
+async function fetchWithTimeout(url: string) {
+  const xhr = await Zotero.HTTP.request("GET", url, {
+    timeout: 15000,
+    errorDelayMax: 0,
+  });
+  const responseText = xhr.responseText ?? "";
+  return {
+    json: () => JSON.parse(responseText),
+    text: () => responseText,
+  };
+}
+
 async function createItemByZotero(
   paper: PaperIdentifier,
   collections: number[],
@@ -58,8 +76,19 @@ async function createItemByZotero(
     translate.setTranslator(translators);
   } else if (paper.url) {
     translate = new Zotero.Translate.Web();
-    const doc = await Zotero.HTTP.processDocuments(paper.url, (doc) => doc);
-    translate.setDocument(doc[0]);
+    // Fetch the page directly instead of Zotero.HTTP.processDocuments so the
+    // request is bounded: without errorDelayMax: 0 a 429/5xx response is
+    // retried with backoff for up to an hour, freezing the update queue.
+    const xhr = await Zotero.HTTP.request("GET", paper.url, {
+      responseType: "document",
+      timeout: 30000,
+      errorDelayMax: 0,
+    });
+    const doc = Zotero.HTTP.wrapDocument(
+      xhr.response as Document,
+      xhr.responseURL || paper.url,
+    );
+    translate.setDocument(doc);
     const translators = await translate.getTranslators();
     translate.setTranslator(translators);
   }
@@ -387,7 +416,9 @@ class PaperFinder {
     ];
     for (const finder of finders) {
       if (!finder) continue;
-      const result = await finder().catch((e) => ztoolkit.log(finder.name, e));
+      const result = await finder().catch((e) =>
+        ztoolkit.log(finder.name, "failed:", String(e)),
+      );
       if (result) return result;
     }
   }
@@ -395,7 +426,7 @@ class PaperFinder {
   async relatedDOI(): Promise<PaperIdentifier | undefined> {
     const urlHost = new URL(this.preprintURL).hostname;
     if (urlHost === KNOWN_PREPRINT_SERVERS.arxiv) {
-      const htmlResp = await fetch(this.preprintURL);
+      const htmlResp = await fetchWithTimeout(this.preprintURL);
       const htmlContent = await htmlResp.text();
       const doiMatch = htmlContent.match(/data-doi="(?<doi>.*?)"/);
       const doi = doiMatch?.groups?.doi;
@@ -411,7 +442,7 @@ class PaperFinder {
         urlHost === KNOWN_PREPRINT_SERVERS.biorxiv
           ? `https://api.biorxiv.org/details/biorxiv/${arxivID}`
           : `https://api.medrxiv.org/details/medrxiv/${arxivID}`;
-      const jsonResp = await fetch(apiURL);
+      const jsonResp = await fetchWithTimeout(apiURL);
       const json = (await jsonResp.json()) as any;
       const doi = json.collection?.[0]?.published as string | undefined;
       return doi ? { doi, title: "Published PDF" } : undefined;
@@ -420,7 +451,7 @@ class PaperFinder {
         ?.arxivID;
       if (!arxivID) return undefined;
       const apiURL = `https://chemrxiv.org/engage/chemrxiv/public-api/v1/items/${arxivID}`;
-      const jsonResp = await fetch(apiURL);
+      const jsonResp = await fetchWithTimeout(apiURL);
       const json = (await jsonResp.json()) as any;
       const doi = json.vor?.vorDoi as string | undefined;
       return doi ? { doi, title: "Published PDF" } : undefined;
@@ -440,7 +471,7 @@ class PaperFinder {
     const arXivID = idMatch.groups.arxiv;
     const semanticAPI = "https://api.semanticscholar.org/graph/v1/paper";
     const semanticURL = `${semanticAPI}/ARXIV:${arXivID}?fields=externalIds`;
-    const jsonResp = await fetch(semanticURL);
+    const jsonResp = await fetchWithTimeout(semanticURL);
     const semanticJSON = (await jsonResp.json()) as any;
     const doi = semanticJSON.externalIds?.DOI as string | undefined;
     // Retrun undefined if the DOI is an arXiv DOI
@@ -462,7 +493,7 @@ class PaperFinder {
     const query = firstAuthor ? `${this.title} ${firstAuthor}` : this.title;
     ztoolkit.log(`DBLP query: ${query}`);
     const dblpURL = `${dblpAPI}?q=${encodeURIComponent(query)}&format=json&h=100`;
-    const jsonResp = await fetch(dblpURL);
+    const jsonResp = await fetchWithTimeout(dblpURL);
     const json = (await jsonResp.json()) as any;
     const hits = json?.result?.hits?.hit ?? [];
     ztoolkit.log(`DBLP returned ${hits.length} hits`);
@@ -511,14 +542,14 @@ class PaperFinder {
     const pubMedSearchAPI =
       "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed";
     const pubMedSearchURL = `${pubMedSearchAPI}&term=${encodeURIComponent(this.title)}&retmode=json`;
-    const searchJsonResp = await fetch(pubMedSearchURL);
+    const searchJsonResp = await fetchWithTimeout(pubMedSearchURL);
     const searchJson = (await searchJsonResp.json()) as any;
     const paperId = searchJson?.esearchresult?.idlist?.[0];
     if (!paperId) return undefined;
     const pubMedPaperAPI =
       "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed";
     const pubMedPaperURL = `${pubMedPaperAPI}&id=${paperId}&retmode=json`;
-    const paperJsonResp = await fetch(pubMedPaperURL);
+    const paperJsonResp = await fetchWithTimeout(pubMedPaperURL);
     const paperJson = (await paperJsonResp.json()) as any;
     // Remove final `.` in title (idk why PubMed has this)
     const info = paperJson?.result?.[paperId];
@@ -563,7 +594,7 @@ class PaperFinder {
     }
     ztoolkit.log(`Current arXiv version: ${localVersion}`);
     if (hasPDF && localVersion === 0) return undefined;
-    const htmlResp = await fetch(this.item.getField("url"));
+    const htmlResp = await fetchWithTimeout(this.item.getField("url"));
     const htmlContent = await htmlResp.text();
     const match = htmlContent.match(/<strong>\[v(\d+)\]<\/strong>/);
     if (!match) return undefined;
