@@ -55,6 +55,10 @@ export function setPluginPref(key: string, value: boolean | number | string) {
   return Zotero.Prefs.set(`${config.prefsPrefix}.${key}`, value, true);
 }
 
+export function clearPluginPref(key: string) {
+  return Zotero.Prefs.clear(`${config.prefsPrefix}.${key}`, true);
+}
+
 export async function createItemByDOI(
   doi: string,
 ): Promise<Zotero.Item | false> {
