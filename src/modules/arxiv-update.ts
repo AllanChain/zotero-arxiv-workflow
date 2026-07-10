@@ -454,25 +454,57 @@ class PaperFinder {
     const urlHost = new URL(this.preprintURL).hostname;
     if (urlHost !== KNOWN_PREPRINT_SERVERS.arxiv) return undefined;
     const dblpAPI = "https://dblp.org/search/publ/api";
-    const dblpURL = `${dblpAPI}?q=${encodeURIComponent(this.title)}&format=json`;
+    // DBLP sends at most 100 hits per query, ordered by year descending.
+    // A title-only query for a popular paper can match hundreds of records
+    // and even homonymous titles by other authors, so narrow the search with
+    // the first author whenever the item has one.
+    const firstAuthor = this.item.getCreators()[0]?.lastName;
+    const query = firstAuthor ? `${this.title} ${firstAuthor}` : this.title;
+    ztoolkit.log(`DBLP query: ${query}`);
+    const dblpURL = `${dblpAPI}?q=${encodeURIComponent(query)}&format=json&h=100`;
     const jsonResp = await fetch(dblpURL);
     const json = (await jsonResp.json()) as any;
-    const info = json?.result?.hits?.hit?.[0]?.info;
-    // Remove final `.` in title (idk why dblp has this)
-    const title = info?.title?.replace(/\.$/, "");
-    if (!matchTitle(this.title, title)) {
+    const hits = json?.result?.hits?.hit ?? [];
+    ztoolkit.log(`DBLP returned ${hits.length} hits`);
+    for (const hit of hits) {
+      const info = hit?.info;
+      // Remove final `.` in title (idk why dblp has this)
+      const title = info?.title?.replace(/\.$/, "");
+      if (!matchTitle(this.title, title)) continue;
+      // Ignore this DBLP entry if it belongs to CoRR. See also #14
+      if (info.venue === "CoRR") {
+        ztoolkit.log(`DBLP: skipping CoRR record ${info.key}`);
+        continue;
+      }
+      // Prefer the DOI when DBLP has one: importing by identifier is more
+      // robust than scraping an arbitrary publisher page.
+      if (info.doi && !String(info.doi).toLowerCase().includes("arxiv")) {
+        ztoolkit.log(`DBLP matched ${info.key} via DOI ${info.doi}`);
+        return { doi: info.doi, title: "Published PDF" };
+      }
+      // Prefer electron edition (ee) which points to the official website instead of DBLP
+      let url = info.ee || info.url;
+      if (!url) continue;
+      // Records without a real venue page (e.g. early ICLR) point back to
+      // arXiv itself; updating from them would re-import the preprint.
+      const host = new URL(url).hostname;
+      if (host === "arxiv.org" || host.endsWith(".arxiv.org")) {
+        ztoolkit.log(`DBLP: skipping arXiv-hosted record ${info.key}`);
+        continue;
+      }
+      // openreview.net serves a script-only page behind an anti-bot
+      // challenge, impossible to import headlessly; import from the BibTeX
+      // view of the DBLP record itself instead.
+      if (host === "openreview.net" || host.endsWith(".openreview.net")) {
+        url = `https://dblp.org/rec/${info.key}.html?view=bibtex`;
+      }
       ztoolkit.log(
-        title
-          ? `DBLP title mismatch: expected "${this.title}", got "${title}"`
-          : "Paper not found on DBLP",
+        `DBLP matched ${info.key} (${info.venue} ${info.year}): ${url}`,
       );
-      return;
+      return { url, title: "Published PDF" };
     }
-    // Ignore this DBLP entry if it belongs to CoRR. See also #14
-    // Prefer electron edition (ee) which points to the official website instead of DBLP
-    return (!info?.ee && !info?.url) || info.venue === "CoRR"
-      ? undefined
-      : { url: info?.ee || info?.url, title: "Published PDF" };
+    ztoolkit.log(`No published version found on DBLP for "${this.title}"`);
+    return undefined;
   }
 
   async pubMed(): Promise<PaperIdentifier | undefined> {
