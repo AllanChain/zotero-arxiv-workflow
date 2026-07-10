@@ -46,6 +46,22 @@ function matchTitle(base: string, target: any): boolean {
   return base.toLowerCase().trim() === target.toLowerCase().trim();
 }
 
+// Discovery services rate-limit aggressively per host: a burst of DBLP
+// queries gets a 429 and then outright dropped connections, failing the rest
+// of the batch. Space out consecutive requests to the same host; requests to
+// different hosts stay concurrent. The plugin sandbox has no setTimeout, so
+// waiting is delegated to Zotero.Promise.delay (untyped in zotero-types).
+const HOST_REQUEST_INTERVAL = 1500;
+const hostGates = new Map<string, Promise<void>>();
+function throttleHost(host: string): Promise<void> {
+  const gate = hostGates.get(host) ?? Promise.resolve();
+  hostGates.set(
+    host,
+    gate.then(() => (Zotero as any).Promise.delay(HOST_REQUEST_INTERVAL)),
+  );
+  return gate;
+}
+
 // Abort discovery requests after a while so that a slow or rate-limited
 // service does not hang the update queue indefinitely. The plugin sandbox
 // exposes fetch but not AbortController/AbortSignal, so rely on Zotero.HTTP
@@ -53,6 +69,7 @@ function matchTitle(base: string, target: any): boolean {
 // disables Zotero's own retry backoff on 429/5xx responses, which would
 // otherwise keep a request alive for up to an hour.
 async function fetchWithTimeout(url: string) {
+  await throttleHost(new URL(url).hostname);
   const xhr = await Zotero.HTTP.request("GET", url, {
     timeout: 15000,
     errorDelayMax: 0,
@@ -76,6 +93,9 @@ async function createItemByZotero(
     translate.setTranslator(translators);
   } else if (paper.url) {
     translate = new Zotero.Translate.Web();
+    // Imports can hit a discovery host again (e.g. the DBLP BibTeX view used
+    // for OpenReview records), so they share the per-host throttle.
+    await throttleHost(new URL(paper.url).hostname);
     // Fetch the page directly instead of Zotero.HTTP.processDocuments so the
     // request is bounded: without errorDelayMax: 0 a 429/5xx response is
     // retried with backoff for up to an hour, freezing the update queue.
