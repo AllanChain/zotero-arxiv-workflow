@@ -119,6 +119,9 @@ export class arXivUpdate {
           onCommand: async () => {
             const preprintItems =
               Zotero.getActiveZoteroPane().getSelectedItems();
+            ztoolkit.log(
+              `Update command: ${preprintItems.length} items selected`,
+            );
             arXivUpdate.update(preprintItems);
           },
           onShowing: (ev, { setVisible }) => {
@@ -149,6 +152,9 @@ export class arXivUpdate {
     arXivUpdate.sortTableData();
     const window = addon.data.arXivUpdate.window;
     const tableHelper = addon.data.arXivUpdate.tableHelper;
+    ztoolkit.log(
+      `Update dialog state: window=${window !== undefined}, closed=${window?.closed}, table=${tableHelper !== undefined}`,
+    );
     if (window !== undefined && !window.closed && tableHelper !== undefined) {
       // Simply update data if window is open and valid
       tableHelper.treeInstance.invalidate();
@@ -172,6 +178,7 @@ export class arXivUpdate {
     preprintItem: Zotero.Item,
     reportProgress: ReportProgress,
   ) {
+    ztoolkit.log(`Update task started for "${preprintItem.getDisplayTitle()}"`);
     reportProgress("finding-update");
     try {
       const paper = await new PaperFinder(preprintItem).find();
@@ -241,6 +248,9 @@ export class arXivUpdate {
           status: "pending",
           message: undefined,
         });
+        ztoolkit.log(
+          `Enqueueing update task for "${preprintItem.getDisplayTitle()}" (queue size=${addon.data.arXivUpdate.queue.size}, pending=${addon.data.arXivUpdate.queue.pending})`,
+        );
         addon.data.arXivUpdate.queue.add(() =>
           arXivUpdate.updateItemWithProgress(preprintItem, (status, msg) => {
             const data = addon.data.arXivUpdate.tableData.find(
@@ -250,6 +260,10 @@ export class arXivUpdate {
             data.message = msg;
             arXivUpdate.sortTableData();
           }),
+        );
+      } else {
+        ztoolkit.log(
+          `Item "${preprintItem.getDisplayTitle()}" already in update table`,
         );
       }
     }
