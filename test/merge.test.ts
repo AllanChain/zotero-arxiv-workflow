@@ -1,6 +1,11 @@
 import { assert } from "chai";
 import type Addon from "../src/addon";
-import { clearLibrary, getPlugin, setPluginPref } from "./helpers";
+import {
+  clearLibrary,
+  clearPluginPref,
+  getPlugin,
+  setPluginPref,
+} from "./helpers";
 
 describe("merge", function () {
   let plugin: Addon;
@@ -15,6 +20,7 @@ describe("merge", function () {
   afterEach(async function () {
     setPluginPref("merge.arXivURL", false);
     setPluginPref("merge.arXivExtra", false);
+    clearPluginPref("merge.reservedKeys");
     await clearLibrary();
   });
 
@@ -87,5 +93,35 @@ describe("merge", function () {
     const extra = mergedItem.getField("extra");
     assert.include(extra, "arXiv:1234.5678");
     assert.include(extra, "Kept note");
+  });
+
+  it("should not duplicate extra notes when extra is reserved", async function () {
+    setPluginPref(
+      "merge.reservedKeys",
+      "collections,dateAdded,dateModified,key,tags,relations,extra",
+    );
+    const { preprintItem, publishedItem } = await createMergeItems({
+      preprintExtra: "Citations: 53",
+      publishedExtra: "Published note",
+    });
+
+    await plugin.api.merge(preprintItem, publishedItem, true);
+
+    const mergedItem = await Zotero.Items.getAsync(preprintItem.id);
+    const extra = mergedItem.getField("extra");
+    assert.equal(extra, "Citations: 53");
+  });
+
+  it("should merge items without extra when extra is reserved", async function () {
+    setPluginPref(
+      "merge.reservedKeys",
+      "collections,dateAdded,dateModified,key,tags,relations,extra",
+    );
+    const { preprintItem, publishedItem } = await createMergeItems();
+
+    await plugin.api.merge(preprintItem, publishedItem, true);
+
+    const mergedItem = await Zotero.Items.getAsync(preprintItem.id);
+    assert.equal(mergedItem.getField("extra"), "");
   });
 });

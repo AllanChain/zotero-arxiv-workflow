@@ -171,22 +171,26 @@ export class arXivMerge {
     });
     // Use URL from journal by default, but can be configured to use arXiv URL
     if (getPref("merge.arXivURL")) journalJSON.url = preprintJSON.url;
-    // `extra` field need more care
-    const preprintExtra = Zotero.Utilities.Internal.extractExtraFields(
-      (preprintJSON.extra ?? "") as string,
-    );
-    journalJSON.extra = Zotero.Utilities.Internal.combineExtraFields(
-      (journalJSON.extra ?? "") as string,
-      preprintExtra.fields,
-    );
-    let notes = preprintExtra.extra;
-    // We generally want to keep extra information, but remove arXiv info
-    if (!getPref("merge.arXivExtra"))
-      notes = notes
-        .split("\n")
-        .filter((line) => !line.startsWith("arXiv:"))
-        .join("\n");
-    if (notes) journalJSON.extra += "\n" + notes;
+    // `extra` field need more care. If the user reserves the whole `extra`
+    // field, it is already copied verbatim above and merging the preprint
+    // extra into it again would duplicate its free-text lines.
+    if (!reservedKeys.includes("extra")) {
+      const preprintExtra = Zotero.Utilities.Internal.extractExtraFields(
+        (preprintJSON.extra ?? "") as string,
+      );
+      journalJSON.extra = Zotero.Utilities.Internal.combineExtraFields(
+        (journalJSON.extra ?? "") as string,
+        preprintExtra.fields,
+      );
+      let notes = preprintExtra.extra;
+      // We generally want to keep extra information, but remove arXiv info
+      if (!getPref("merge.arXivExtra"))
+        notes = notes
+          .split("\n")
+          .filter((line) => !line.startsWith("arXiv:"))
+          .join("\n");
+      if (notes) journalJSON.extra += "\n" + notes;
+    }
 
     /* Avoid citation key collision after preprint item updates (say year)
      * For example, no collision:
@@ -203,7 +207,7 @@ export class arXivMerge {
      * TODO: What if the user wants to keep the citation key (not fixed in BBT)?
      */
     const tempExtra = Zotero.Utilities.Internal.combineExtraFields(
-      journalJSON.extra as string,
+      (journalJSON.extra ?? "") as string,
       // @ts-expect-error key not listed in type
       new Map([["Citation Key", crypto.randomUUID()]]),
     );
