@@ -1,4 +1,5 @@
 import { config } from "../../package.json";
+import PQueue from "p-queue";
 import { getString } from "../utils/locale";
 import { getPref } from "../utils/prefs";
 import { arXivMerge } from "./arxiv-merge";
@@ -46,39 +47,50 @@ function matchTitle(base: string, target: any): boolean {
   return base.toLowerCase().trim() === target.toLowerCase().trim();
 }
 
-// Discovery services rate-limit aggressively per host: a burst of DBLP
-// queries gets a 429 and then outright dropped connections, failing the rest
-// of the batch. Space out consecutive requests to the same host; requests to
-// different hosts stay concurrent. The plugin sandbox has no setTimeout, so
-// waiting is delegated to Zotero.Promise.delay (untyped in zotero-types).
-const HOST_REQUEST_INTERVAL = 1500;
-const hostGates = new Map<string, Promise<void>>();
-function throttleHost(host: string): Promise<void> {
-  const gate = hostGates.get(host) ?? Promise.resolve();
-  hostGates.set(
-    host,
-    gate.then(() => (Zotero as any).Promise.delay(HOST_REQUEST_INTERVAL)),
-  );
-  return gate;
+// Limit concurrent requests per host to avoid being rate-limited.
+const hostQueues = new Map<string, PQueue>();
+function hostQueue(host: string): PQueue {
+  let queue = hostQueues.get(host);
+  if (!queue) {
+    queue = new PQueue({
+      concurrency: 1,
+      intervalCap: 1,
+      interval: 1500,
+    });
+    hostQueues.set(host, queue);
+  }
+  return queue;
 }
 
-// Abort discovery requests after a while so that a slow or rate-limited
-// service does not hang the update queue indefinitely. The plugin sandbox
-// exposes fetch but not AbortController/AbortSignal, so rely on Zotero.HTTP
-// and its native timeout option instead of a fetch signal. errorDelayMax: 0
-// disables Zotero's own retry backoff on 429/5xx responses, which would
-// otherwise keep a request alive for up to an hour.
-async function fetchWithTimeout(url: string) {
-  await throttleHost(new URL(url).hostname);
-  const xhr = await Zotero.HTTP.request("GET", url, {
-    timeout: 15000,
-    errorDelayMax: 0,
-  });
-  const responseText = xhr.responseText ?? "";
-  return {
-    json: () => JSON.parse(responseText),
-    text: () => responseText,
-  };
+// Bound requests so a slow request can't hang the update queue.
+// Zotero.HTTP (not bare `fetch`) routes through Zotero's proxy
+// rewriting, which campus users rely on, and shares the translator
+// framework's HTTP/proxy/cookie footing for follow-up requests.
+// errorDelayMax: 30000 caps Zotero's 5xx retry backoff at 30s (default 1h)
+// so a failing host can't stall the queue. throwOnTimeout: true is a runtime
+// no-op (no queue timeout is set) but narrows p-queue add()'s return type to
+// the task result instead of `TaskResultType | void`.
+function requestBounded(
+  url: string,
+  options: { timeout?: number; responseType?: string } = {},
+): Promise<XMLHttpRequest> {
+  return hostQueue(new URL(url).hostname).add(
+    () =>
+      Zotero.HTTP.request("GET", url, {
+        timeout: 15000,
+        errorDelayMax: 30000,
+        ...options,
+      }),
+    { throwOnTimeout: true },
+  );
+}
+
+async function fetchTextBounded(url: string): Promise<string> {
+  return (await requestBounded(url)).responseText!;
+}
+
+async function fetchJSONBounded<T = any>(url: string): Promise<T> {
+  return JSON.parse((await requestBounded(url)).responseText!) as T;
 }
 
 async function createItemByZotero(
@@ -93,16 +105,11 @@ async function createItemByZotero(
     translate.setTranslator(translators);
   } else if (paper.url) {
     translate = new Zotero.Translate.Web();
-    // Imports can hit a discovery host again (e.g. the DBLP BibTeX view used
-    // for OpenReview records), so they share the per-host throttle.
-    await throttleHost(new URL(paper.url).hostname);
-    // Fetch the page directly instead of Zotero.HTTP.processDocuments so the
-    // request is bounded: without errorDelayMax: 0 a 429/5xx response is
-    // retried with backoff for up to an hour, freezing the update queue.
-    const xhr = await Zotero.HTTP.request("GET", paper.url, {
-      responseType: "document",
+    // Imports can re-hit a host (e.g. the DBLP BibTeX view used
+    // for OpenReview records), so they share the per-host queue.
+    const xhr = await requestBounded(paper.url, {
       timeout: 30000,
-      errorDelayMax: 0,
+      responseType: "document",
     });
     const doc = Zotero.HTTP.wrapDocument(
       xhr.response as Document,
@@ -460,8 +467,7 @@ class PaperFinder {
   async relatedDOI(): Promise<PaperIdentifier | undefined> {
     const urlHost = new URL(this.preprintURL).hostname;
     if (urlHost === KNOWN_PREPRINT_SERVERS.arxiv) {
-      const htmlResp = await fetchWithTimeout(this.preprintURL);
-      const htmlContent = await htmlResp.text();
+      const htmlContent = await fetchTextBounded(this.preprintURL);
       const doiMatch = htmlContent.match(/data-doi="(?<doi>.*?)"/);
       const doi = doiMatch?.groups?.doi;
       return doi ? { doi, title: "Published PDF" } : undefined;
@@ -476,8 +482,7 @@ class PaperFinder {
         urlHost === KNOWN_PREPRINT_SERVERS.biorxiv
           ? `https://api.biorxiv.org/details/biorxiv/${arxivID}`
           : `https://api.medrxiv.org/details/medrxiv/${arxivID}`;
-      const jsonResp = await fetchWithTimeout(apiURL);
-      const json = (await jsonResp.json()) as any;
+      const json = await fetchJSONBounded(apiURL);
       const doi = json.collection?.[0]?.published as string | undefined;
       return doi ? { doi, title: "Published PDF" } : undefined;
     } else if (urlHost == KNOWN_PREPRINT_SERVERS.chemrxiv) {
@@ -485,8 +490,7 @@ class PaperFinder {
         ?.arxivID;
       if (!arxivID) return undefined;
       const apiURL = `https://chemrxiv.org/engage/chemrxiv/public-api/v1/items/${arxivID}`;
-      const jsonResp = await fetchWithTimeout(apiURL);
-      const json = (await jsonResp.json()) as any;
+      const json = await fetchJSONBounded(apiURL);
       const doi = json.vor?.vorDoi as string | undefined;
       return doi ? { doi, title: "Published PDF" } : undefined;
     } else {
@@ -505,8 +509,7 @@ class PaperFinder {
     const arXivID = idMatch.groups.arxiv;
     const semanticAPI = "https://api.semanticscholar.org/graph/v1/paper";
     const semanticURL = `${semanticAPI}/ARXIV:${arXivID}?fields=externalIds`;
-    const jsonResp = await fetchWithTimeout(semanticURL);
-    const semanticJSON = (await jsonResp.json()) as any;
+    const semanticJSON = await fetchJSONBounded(semanticURL);
     const doi = semanticJSON.externalIds?.DOI as string | undefined;
     // Retrun undefined if the DOI is an arXiv DOI
     return !doi || doi.toLowerCase()?.includes("arxiv")
@@ -527,8 +530,7 @@ class PaperFinder {
     const query = firstAuthor ? `${this.title} ${firstAuthor}` : this.title;
     ztoolkit.log(`DBLP query: ${query}`);
     const dblpURL = `${dblpAPI}?q=${encodeURIComponent(query)}&format=json&h=100`;
-    const jsonResp = await fetchWithTimeout(dblpURL);
-    const json = (await jsonResp.json()) as any;
+    const json = await fetchJSONBounded(dblpURL);
     const hits = json?.result?.hits?.hit ?? [];
     ztoolkit.log(`DBLP returned ${hits.length} hits`);
     for (const hit of hits) {
@@ -576,15 +578,13 @@ class PaperFinder {
     const pubMedSearchAPI =
       "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed";
     const pubMedSearchURL = `${pubMedSearchAPI}&term=${encodeURIComponent(this.title)}&retmode=json`;
-    const searchJsonResp = await fetchWithTimeout(pubMedSearchURL);
-    const searchJson = (await searchJsonResp.json()) as any;
+    const searchJson = await fetchJSONBounded(pubMedSearchURL);
     const paperId = searchJson?.esearchresult?.idlist?.[0];
     if (!paperId) return undefined;
     const pubMedPaperAPI =
       "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed";
     const pubMedPaperURL = `${pubMedPaperAPI}&id=${paperId}&retmode=json`;
-    const paperJsonResp = await fetchWithTimeout(pubMedPaperURL);
-    const paperJson = (await paperJsonResp.json()) as any;
+    const paperJson = await fetchJSONBounded(pubMedPaperURL);
     // Remove final `.` in title (idk why PubMed has this)
     const info = paperJson?.result?.[paperId];
     const title = info?.title?.replace(/\.$/, "");
@@ -628,8 +628,7 @@ class PaperFinder {
     }
     ztoolkit.log(`Current arXiv version: ${localVersion}`);
     if (hasPDF && localVersion === 0) return undefined;
-    const htmlResp = await fetchWithTimeout(this.item.getField("url"));
-    const htmlContent = await htmlResp.text();
+    const htmlContent = await fetchTextBounded(this.item.getField("url"));
     const match = htmlContent.match(/<strong>\[v(\d+)\]<\/strong>/);
     if (!match) return undefined;
     const onlineVersion = parseInt(match[1], 10);
