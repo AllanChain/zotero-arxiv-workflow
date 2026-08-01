@@ -1,8 +1,8 @@
 import { config } from "../../../package.json";
 import { getString } from "../../utils/locale";
-import { UpdateStatus, UpdateTableData } from "../../types";
+import { UpdateStatus } from "../../types";
 import { diffWords } from "diff";
-import { arXivUpdate } from "./index";
+import type { VirtualizedTableHelper } from "zotero-plugin-toolkit";
 
 type SimpleUpdateStatus =
   | "pending"
@@ -37,13 +37,20 @@ function simplifyUpdateStatus(status: UpdateStatus): SimpleUpdateStatus {
 export class UpdateDialog {
   /** Row id whose confirmation dialog is currently open; guards against stacking dialogs. */
   static openCandidateDialogId?: number;
+  static window?: WindowProxy;
+  static tableHelper?: VirtualizedTableHelper;
+  /** Manager listener active while the update window is open. */
+  static tableChangeListener?: () => void;
+
+  private static get manager() {
+    return addon.data.arXivUpdate.manager;
+  }
 
   // Refresh the open progress window with the latest queue state, or clear
   // finished rows and reopen the window when it is not available.
   static refreshOrOpen(options: { openWindow?: boolean } = {}) {
-    UpdateDialog.sortTableData();
-    const window = addon.data.arXivUpdate.window;
-    const tableHelper = addon.data.arXivUpdate.tableHelper;
+    const window = UpdateDialog.window;
+    const tableHelper = UpdateDialog.tableHelper;
     ztoolkit.log(
       `Update dialog state: window=${window !== undefined}, closed=${window?.closed}, table=${tableHelper !== undefined}`,
     );
@@ -55,13 +62,8 @@ export class UpdateDialog {
         maxHeight: 300,
       });
     } else {
-      // Clear old data and reopen window otherwise
-      addon.data.arXivUpdate.tableData =
-        addon.data.arXivUpdate.tableData.filter((data) =>
-          ["processing", "pending", "needs-confirmation"].includes(
-            simplifyUpdateStatus(data.status),
-          ),
-        );
+      // Clear finished rows and reopen the window otherwise
+      UpdateDialog.manager.retainActiveRows();
       if (options.openWindow ?? true) {
         UpdateDialog.open();
       }
@@ -76,11 +78,23 @@ export class UpdateDialog {
       "chrome,scroll,centerscreen",
       { loadLock },
     )!;
-    addon.data.arXivUpdate.window = window;
+    UpdateDialog.window = window;
+    // React to manager row changes while this window is open.
+    UpdateDialog.tableChangeListener = () => UpdateDialog.refreshTable();
+    UpdateDialog.manager.subscribe(UpdateDialog.tableChangeListener);
     window.addEventListener("DOMContentLoaded", () => loadLock.resolve());
     await loadLock.promise;
 
-    addon.data.arXivUpdate.tableHelper = new ztoolkit.VirtualizedTable(window)
+    // The window's initial about:blank document unloads as the XUL document
+    // loads, so register the cleanup listener only after the load: from here
+    // on, `unload` fires only when the window really closes.
+    window.addEventListener("unload", () => {
+      UpdateDialog.unsubscribeFromManager();
+      UpdateDialog.window = undefined;
+      UpdateDialog.tableHelper = undefined;
+    });
+
+    UpdateDialog.tableHelper = new ztoolkit.VirtualizedTable(window)
       .setContainerId(`${config.addonRef}-status-container`)
       .setProp({
         id: `${config.addonRef}-status-table`,
@@ -105,9 +119,9 @@ export class UpdateDialog {
         staticColumns: true,
         showHeader: true,
         multiSelect: false,
-        getRowCount: () => addon.data.arXivUpdate.tableData.length,
+        getRowCount: () => UpdateDialog.manager.getRows().length,
         getRowData: (index) => {
-          const data = addon.data.arXivUpdate.tableData[index];
+          const data = UpdateDialog.manager.getRows()[index];
           let message = getString("update-status", data.status);
           if (data.message) {
             message += ": " + data.message;
@@ -127,11 +141,11 @@ export class UpdateDialog {
         onSelectionChange: (selection) => {
           const selectedRow = selection.selected.values().next().value;
           if (selectedRow === undefined) return;
-          const paperId = addon.data.arXivUpdate.tableData[selectedRow].id;
+          const paperId = UpdateDialog.manager.getRows()[selectedRow].id;
           Zotero.getMainWindow()?.ZoteroPane.selectItem(paperId);
         },
         onActivate: (_, items) => {
-          const paperId = addon.data.arXivUpdate.tableData[items[0]].id;
+          const paperId = UpdateDialog.manager.getRows()[items[0]].id;
           const win = Zotero.getMainWindow();
           if (win) {
             win.ZoteroPane.selectItem(paperId);
@@ -140,9 +154,8 @@ export class UpdateDialog {
         },
       })
       .render(-1, () => {
-        // Render the initial row order now that the table exists, then size
-        // the window to its content.
-        UpdateDialog.sortTableData();
+        // Size the window to its content now that the table exists. Rows are
+        // already kept in display order by the manager.
         (window.sizeToContentConstrained ?? window.sizeToContent)({
           prefWidth: 500,
           maxHeight: 300,
@@ -182,9 +195,9 @@ export class UpdateDialog {
       className: string;
     },
   ) {
-    const document = addon.data.arXivUpdate.window?.document;
+    const document = UpdateDialog.window?.document;
     if (!document) return;
-    const data = addon.data.arXivUpdate.tableData[index];
+    const data = UpdateDialog.manager.getRows()[index];
 
     const colorMap: Record<SimpleUpdateStatus, string> = {
       pending: "#999999",
@@ -225,7 +238,7 @@ export class UpdateDialog {
       link.addEventListener("click", (event: Event) => {
         event.preventDefault();
         event.stopPropagation();
-        const row = addon.data.arXivUpdate.tableData[index];
+        const row = UpdateDialog.manager.getRows()[index];
         if (row?.status === "needs-confirmation") {
           void UpdateDialog.confirmCandidateWithDialog(row.id);
         }
@@ -239,72 +252,20 @@ export class UpdateDialog {
     return div;
   }
 
-  static sortTableData() {
-    const newTableData: UpdateTableData[] = [];
-    for (const status of [
-      "error",
-      "needs-confirmation",
-      "processing",
-      "pending",
-      "updated",
-      "up-to-date",
-    ]) {
-      for (const tableDatum of addon.data.arXivUpdate.tableData) {
-        if (simplifyUpdateStatus(tableDatum.status) === status) {
-          newTableData.push(tableDatum);
-        }
-      }
-    }
-    addon.data.arXivUpdate.tableData.splice(
-      0,
-      addon.data.arXivUpdate.tableData.length,
-      ...newTableData,
-    );
-    addon.data.arXivUpdate.tableHelper?.treeInstance.invalidate();
-  }
-
-  static async confirmCandidate(id: number) {
-    const data = addon.data.arXivUpdate.tableData.find((d) => d.id === id);
-    if (!data || data.status !== "needs-confirmation") return;
-    const paper = data.pendingPaper;
-    if (!paper) return;
-    data.pendingPaper = undefined;
-    data.status = "finding-update";
-    data.message = undefined;
-    UpdateDialog.sortTableData();
-    const preprintItem = await Zotero.Items.getAsync(data.id);
-    if (!preprintItem) {
-      data.status = "general-error";
-      data.message = "Item not found";
-      UpdateDialog.sortTableData();
-      return;
-    }
-    try {
-      await arXivUpdate.importAndMerge(preprintItem, paper, (status, msg) => {
-        data.status = status;
-        data.message = msg;
-        UpdateDialog.sortTableData();
-      });
-    } catch (err) {
-      ztoolkit.log(err);
-      data.status = "general-error";
-      data.message =
-        err instanceof Error
-          ? err.message
-          : typeof err === "string"
-            ? err
-            : "Unknown error";
-      UpdateDialog.sortTableData();
+  /** React to manager row changes: rows are pre-sorted, so just re-render. */
+  static refreshTable() {
+    const window = UpdateDialog.window;
+    if (window !== undefined && !window.closed) {
+      UpdateDialog.tableHelper?.treeInstance.invalidate();
     }
   }
 
-  static skipCandidate(id: number) {
-    const data = addon.data.arXivUpdate.tableData.find((d) => d.id === id);
-    if (!data || data.status !== "needs-confirmation") return;
-    data.status = "up-to-date";
-    data.message = getString("review-message", "skipped");
-    data.pendingPaper = undefined;
-    UpdateDialog.sortTableData();
+  private static unsubscribeFromManager() {
+    const listener = UpdateDialog.tableChangeListener;
+    if (listener) {
+      UpdateDialog.manager.unsubscribe(listener);
+      UpdateDialog.tableChangeListener = undefined;
+    }
   }
 
   // Open the per-row confirmation dialog and route the answer. The dialog is
@@ -314,7 +275,7 @@ export class UpdateDialog {
     // A single confirmation dialog at a time: ignore clicks while one is open
     // so double-clicks cannot stack dialogs for the same or other rows.
     if (UpdateDialog.openCandidateDialogId !== undefined) return;
-    const data = addon.data.arXivUpdate.tableData.find((d) => d.id === id);
+    const data = UpdateDialog.manager.getRow(id);
     if (!data || data.status !== "needs-confirmation") return;
     const paper = data.pendingPaper;
     const candidate = paper?.candidate;
@@ -329,14 +290,23 @@ export class UpdateDialog {
       "chrome,scroll,centerscreen",
       { loadLock, answer },
     )!;
+    await loadLock.promise;
+
+    // The dialog's initial about:blank document unloads as the XUL document
+    // loads, so register the cleanup listener only after the load: from here
+    // on, `unload` fires only when the dialog really closes.
     window.addEventListener("unload", () => {
       UpdateDialog.openCandidateDialogId = undefined;
     });
-    await loadLock.promise;
+    if (window.closed) {
+      // Closed while loading: clear the guard without acting.
+      UpdateDialog.openCandidateDialogId = undefined;
+      return;
+    }
 
     // The row may have been confirmed or skipped while the window was
     // loading; close the dialog without acting in that case.
-    const current = addon.data.arXivUpdate.tableData.find((d) => d.id === id);
+    const current = UpdateDialog.manager.getRow(id);
     const currentCandidate = current?.pendingPaper?.candidate;
     if (
       !current ||
@@ -428,9 +398,9 @@ export class UpdateDialog {
     window.close();
     UpdateDialog.openCandidateDialogId = undefined;
     if (result === "confirm") {
-      await UpdateDialog.confirmCandidate(id);
+      await UpdateDialog.manager.confirm(id);
     } else if (result === "skip") {
-      UpdateDialog.skipCandidate(id);
+      UpdateDialog.manager.skip(id);
     }
     // "cancel": the dialog was closed without choosing; leave the row pending.
   }

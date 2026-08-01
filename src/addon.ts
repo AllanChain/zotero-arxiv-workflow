@@ -1,11 +1,10 @@
 import { config } from "../package.json";
-import PQueue from "p-queue";
 import hooks from "./hooks";
 import { createZToolkit } from "./utils/ztoolkit";
-import type { UpdateWindowData } from "./types";
 import { getPref } from "./utils/prefs";
 import { arXivMerge } from "./modules/arxiv-merge";
 import { arXivUpdate } from "./modules/arxiv-update";
+import { UpdateManager } from "./modules/arxiv-update/manager";
 import { PreferPDF } from "./modules/prefer-pdf";
 import { UpdatePDF } from "./modules/update-pdf";
 
@@ -23,7 +22,10 @@ class Addon {
     prefs?: {
       window: Window;
     };
-    arXivUpdate: UpdateWindowData;
+    arXivUpdate: {
+      manager: UpdateManager;
+      unregisterObserver?: () => void;
+    };
   };
   // Lifecycle hooks
   public hooks: typeof hooks;
@@ -43,8 +45,9 @@ class Addon {
       initialized: false,
       ztoolkit: createZToolkit(),
       arXivUpdate: {
-        tableData: [],
-        queue: new PQueue({ concurrency: getPref("update.concurrency") }),
+        manager: new UpdateManager({
+          concurrency: getPref("update.concurrency"),
+        }),
       },
     };
     this.hooks = hooks;

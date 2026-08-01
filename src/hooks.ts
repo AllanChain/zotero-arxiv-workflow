@@ -42,7 +42,7 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
     addon.data.arXivUpdate.unregisterObserver = registerPrefObserver(
       "update.concurrency",
       (concurrency) => {
-        addon.data.arXivUpdate.queue.concurrency = concurrency;
+        addon.data.arXivUpdate.manager.setConcurrency(concurrency);
       },
     );
   }

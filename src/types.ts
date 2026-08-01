@@ -1,6 +1,3 @@
-import type { VirtualizedTableHelper } from "zotero-plugin-toolkit";
-import type PQueue from "p-queue";
-
 export type CandidateSource = "DBLP" | "PubMed";
 
 export type PaperIdentifier = {
@@ -38,11 +35,4 @@ export type UpdateTableData = {
   status: UpdateStatus;
   message?: string;
   pendingPaper?: PaperIdentifier;
-};
-export type UpdateWindowData = {
-  tableData: UpdateTableData[];
-  tableHelper?: VirtualizedTableHelper;
-  window?: WindowProxy;
-  unregisterObserver?: () => void;
-  queue: PQueue;
 };
