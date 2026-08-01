@@ -18,13 +18,15 @@ export class UpdatePDF {
           icon: UpdatePDF.menuIcon,
           onCommand: async () => {
             const journalItem =
-              Zotero.getActiveZoteroPane().getSelectedItems()[0];
-            UpdatePDF.update(journalItem);
+              Zotero.getActiveZoteroPane()?.getSelectedItems()[0];
+            if (journalItem) UpdatePDF.update(journalItem);
           },
           onShowing: (ev, { setVisible }) => {
-            const items = Zotero.getActiveZoteroPane().getSelectedItems();
+            const items = Zotero.getActiveZoteroPane()?.getSelectedItems();
             setVisible(
-              items.length === 1 && items[0].itemType === "journalArticle",
+              !!items &&
+                items.length === 1 &&
+                items[0].itemType === "journalArticle",
             );
           },
         },

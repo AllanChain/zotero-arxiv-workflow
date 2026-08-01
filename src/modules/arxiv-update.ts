@@ -119,7 +119,7 @@ async function createItemByZotero(
     const translators = await translate.getTranslators();
     translate.setTranslator(translators);
   }
-  const libraryID = Zotero.getActiveZoteroPane().getSelectedLibraryID();
+  const libraryID = Zotero.getActiveZoteroPane()!.getSelectedLibraryID();
   const items = await translate.translate({
     libraryID,
     collections,
@@ -145,21 +145,22 @@ export class arXivUpdate {
           icon: arXivUpdate.menuIcon,
           onCommand: async () => {
             const preprintItems =
-              Zotero.getActiveZoteroPane().getSelectedItems();
+              Zotero.getActiveZoteroPane()?.getSelectedItems();
+            if (!preprintItems) return;
             ztoolkit.log(
               `Update command: ${preprintItems.length} items selected`,
             );
             arXivUpdate.update(preprintItems);
           },
           onShowing: (ev, { setVisible }) => {
-            const isKnownPreprintItem = Zotero.getActiveZoteroPane()
-              .getSelectedItems()
-              .map((item) => {
-                if (item.itemType !== "preprint") return false;
-                const arXivURL = item.getField("url");
-                const urlHost = new URL(arXivURL).hostname;
-                return Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost);
-              });
+            const isKnownPreprintItem = (
+              Zotero.getActiveZoteroPane()?.getSelectedItems() ?? []
+            ).map((item) => {
+              if (item.itemType !== "preprint") return false;
+              const arXivURL = item.getField("url");
+              const urlHost = new URL(arXivURL).hostname;
+              return Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost);
+            });
             if (getPref("update.alwaysShowButton"))
               setVisible(isKnownPreprintItem.some(Boolean));
             else setVisible(isKnownPreprintItem.every(Boolean));
@@ -212,7 +213,7 @@ export class arXivUpdate {
       if (paper === undefined) return reportProgress("up-to-date");
       // Download published version
       reportProgress("downloading-metadata");
-      const collection = Zotero.getActiveZoteroPane().getSelectedCollection();
+      const collection = Zotero.getActiveZoteroPane()?.getSelectedCollection();
       let collections: number[] = [];
       if (collection) {
         collections = [collection.id];
@@ -616,7 +617,7 @@ class PaperFinder {
     let localVersion = 0;
     for (const attachmentID of this.item.getAttachments()) {
       const attachment = await Zotero.Items.getAsync(attachmentID);
-      if (!attachment.isPDFAttachment()) continue;
+      if (!attachment || !attachment.isPDFAttachment()) continue;
       hasPDF = true;
       const fullText = await Zotero.PDFWorker.getFullText(attachmentID, 1);
       const match = fullText.text.match(/arXiv:[\d.]+v(\d+)/);

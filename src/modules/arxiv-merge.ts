@@ -18,7 +18,8 @@ export class arXivMerge {
           l10nID: `${config.addonRef}-menuitem-merge`,
           icon: menuIcon,
           onCommand: async (ev) => {
-            const items = Zotero.getActiveZoteroPane().getSelectedItems();
+            const items =
+              Zotero.getActiveZoteroPane()?.getSelectedItems() ?? [];
             if (items.length !== 2) {
               Zotero.alert(
                 // @ts-expect-error null is also a valid argument
@@ -42,7 +43,8 @@ export class arXivMerge {
             await this.merge(preprintItem, publishedItem);
           },
           onShowing: (ev, { setVisible }) => {
-            const items = Zotero.getActiveZoteroPane().getSelectedItems();
+            const items =
+              Zotero.getActiveZoteroPane()?.getSelectedItems() ?? [];
             if (items.length !== 2) {
               setVisible(false);
               return;
@@ -222,7 +224,7 @@ export class arXivMerge {
     let hasSnapshot = false;
     for (const attachmentID of preprintItem.getAttachments()) {
       const attachment = await Zotero.Items.getAsync(attachmentID);
-      if (attachment.isSnapshotAttachment()) {
+      if (attachment && attachment.isSnapshotAttachment()) {
         hasSnapshot = true;
         break;
       }
@@ -237,6 +239,7 @@ export class arXivMerge {
     if (getPref("merge.trashUnannotatedPDF")) {
       for (const attachmentID of preprintItem.getAttachments()) {
         const attachment = await Zotero.Items.getAsync(attachmentID);
+        if (!attachment) continue;
         if (!attachment.isPDFAttachment()) continue;
         if (attachment.getAnnotations().length) continue;
         await Zotero.Items.trashTx(attachmentID);
@@ -247,6 +250,7 @@ export class arXivMerge {
       let oldestPDFDate = new Date();
       for (const attachmentID of preprintItem.getAttachments()) {
         const attachment = await Zotero.Items.getAsync(attachmentID);
+        if (!attachment) continue;
         const attachmentDate = new Date(attachment.dateAdded);
         if (attachmentDate.getTime() < oldestPDFDate.getTime()) {
           oldestPDFDate = attachmentDate;
@@ -255,7 +259,7 @@ export class arXivMerge {
       oldestPDFDate = new Date(oldestPDFDate.getTime() - 100);
       for (const attachmentID of publishedItem.getAttachments()) {
         const attachment = await Zotero.Items.getAsync(attachmentID);
-        if (attachment.isPDFAttachment()) {
+        if (attachment && attachment.isPDFAttachment()) {
           attachment.dateAdded = oldestPDFDate.toISOString();
           attachment.saveTx();
         }
