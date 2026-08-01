@@ -17,12 +17,14 @@ export class PreferPDF {
           icon: menuIcon,
           onCommand: async () => {
             const selectedAttachment =
-              Zotero.getActiveZoteroPane().getSelectedItems()[0];
-            PreferPDF.prefer(selectedAttachment);
+              Zotero.getActiveZoteroPane()?.getSelectedItems()[0];
+            if (selectedAttachment) PreferPDF.prefer(selectedAttachment);
           },
           onShowing: (ev, { setVisible }) => {
-            const items = Zotero.getActiveZoteroPane().getSelectedItems();
-            setVisible(items.length === 1 && items[0].isPDFAttachment());
+            const items = Zotero.getActiveZoteroPane()?.getSelectedItems();
+            setVisible(
+              !!items && items.length === 1 && items[0].isPDFAttachment(),
+            );
           },
         },
       ],
@@ -40,7 +42,7 @@ export class PreferPDF {
     let oldestPDFDate = new Date();
     for (const attachmentID of item.getAttachments()) {
       const attachment = await Zotero.Items.getAsync(attachmentID);
-      if (!attachment.isPDFAttachment()) continue;
+      if (!attachment || !attachment.isPDFAttachment()) continue;
       ztoolkit.log(attachment.toJSON());
       const attachmentDate = new Date(attachment.dateAdded);
       if (attachmentDate.getTime() < oldestPDFDate.getTime()) {
