@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://zotero-platform/content/zotero.css"?>
+<?xml-stylesheet href="chrome://__addonRef__/content/candidate-confirm.css"?>
+<dialog
+  xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+  xmlns:html="http://www.w3.org/1999/xhtml"
+  buttons="accept,extra1"
+  buttonlabelaccept="Confirm"
+  buttonlabelextra1="Skip"
+  width="500"
+>
+  <script>
+    window.addEventListener("load", function () {
+      try {
+        window.arguments[0].loadLock.resolve();
+        document.addEventListener("dialogaccept", function (event) {
+          window.arguments[0].answer.resolve("confirm");
+        });
+        document.addEventListener("dialogextra1", function (event) {
+          window.arguments[0].answer.resolve("skip");
+        });
+        document.addEventListener("dialogcancel", function (event) {
+          window.arguments[0].answer.resolve("cancel");
+        });
+      } catch (e) {
+        window.arguments[0].answer.reject(e);
+      }
+    });
+    // If the dialog is closed by other means (e.g. the X button), resolve as
+    // cancel so the opener never waits on a dangling promise.
+    window.addEventListener("unload", function () {
+      window.arguments[0].answer.resolve("cancel");
+    });
+  </script>
+  <linkset>
+    <html:link rel="localization" href="__addonRef__-addon.ftl" />
+  </linkset>
+  <vbox>
+    <html:p data-l10n-id="candidate-confirm-message"></html:p>
+    <html:ul>
+      <html:li id="__addonRef__-preprint-title"></html:li>
+      <html:li id="__addonRef__-candidate-title"></html:li>
+    </html:ul>
+    <html:p id="__addonRef__-candidate-meta"></html:p>
+    <html:p id="__addonRef__-candidate-link"></html:p>
+  </vbox>
+</dialog>

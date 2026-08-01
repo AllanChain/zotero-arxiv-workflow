@@ -24,10 +24,29 @@ update-status =
   .finding-update = 正在寻找更新
   .downloading-metadata = 正在下载文章元数据
   .downloading-pdf = 正在下载文章 PDF
+  .needs-confirmation = 等待确认
   .up-to-date = 未找到更新
   .updated = 更新成功
   .download-error = 下载文章元数据失败
   .general-error = 更新失败
+
+review-candidate =
+  .dblp = DBLP
+  .pubmed = PubMed
+
+review-prompt = 发现模糊匹配。
+
+candidate-confirm-title = 确认模糊匹配
+candidate-confirm-message = 为此预印本找到了一个模糊匹配。请核对下方候选条目：确认将已发表版本合并到预印本，跳过则保留预印本不变。
+
+review-action =
+  .confirm = 确认
+  .skip = 跳过
+  .click-to-check = 点击查看
+  .view-candidate = 查看候选论文页面
+
+review-message =
+  .skipped = 已跳过候选
 
 update-pdf-prompt = 下载最新 PDF
   .download = 正在下载 PDF
