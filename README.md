@@ -15,7 +15,7 @@
 This Zotero plugin addresses the pain when you store papers from arXiv and want to update your Zotero entry when they are published.
 
 > [!Warning]
-> This plugin is in alpha stage and only suports Zotero 8 and 9!
+> This plugin is in alpha stage and only supports Zotero 8, 9, and 10!
 >
 > I strongly recommend you to check the results manually after operations.
 
@@ -23,7 +23,7 @@ This Zotero plugin addresses the pain when you store papers from arXiv and want 
 
 - 🪢 Merge a preprint item and a journal article item without pain
 - 🗃️ Easy to set which PDF to open by default
-- 📄 Search online if a arXiv paper is published or updated and update the information and PDF accordingly
+- 📄 Search online if a preprint paper is published or updated and update the information and PDF accordingly
 - 🌐 Download the latest version of published PDF
 
 ## 🤔 Why?
@@ -164,14 +164,15 @@ This function assumes that the argument is a PDF attachment. Currently, no check
 
 </details>
 
-### 📄 Search for updated version of an arXiv paper
+### 📄 Search for updated version of a preprint
 
-If you have a preprint item for the arXiv paper, and you want to find if it has been published on journals or updated on arXiv, and then update the information, you can right click on the preprint item and select "Update arXiv paper". This will search:
+If you have a preprint item and want to find if it has been published in a journal or updated on the preprint server, you can right click on the preprint item and select "Update arXiv paper". Supported preprint servers include [arXiv](https://arxiv.org), [bioRxiv](https://www.biorxiv.org), [medRxiv](https://www.medrxiv.org), [chemRxiv](https://chemrxiv.org), and [PsyArxiv](https://osf.io). This will search:
 
 1. Published versions by trying:
-   1. [arXiv](https://arxiv.org) for the "Related DOI" field, which may be updated if the paper got published
+   1. Related DOI from the preprint server ([arXiv](https://arxiv.org), [bioRxiv](https://www.biorxiv.org), [medRxiv](https://www.medrxiv.org), [chemRxiv](https://chemrxiv.org)), which may be updated if the paper got published
    2. [Semantic Scholar](https://www.semanticscholar.org) API
    3. [DBLP](https://dblp.org) API
+   4. [PubMed](https://pubmed.ncbi.nlm.nih.gov) API
 2. If no published version found, the plugin will search [arXiv](https://arxiv.org) for updated versions
 
 > [!Note]
@@ -224,4 +225,6 @@ This repo is created from the [Zotero plugin template](https://github.com/windin
 The following resources are also helpful:
 
 - [Zotero 7 for Developers](https://www.zotero.org/support/dev/zotero_7_for_developers)
+- [Zotero 8 for Developers](https://www.zotero.org/support/dev/zotero_8_for_developers)
+- [Zotero 10 for Developers](https://www.zotero.org/support/dev/zotero_10_for_developers)
 - [Zotero Plugin Development](https://www.zotero.org/support/dev/client_coding/plugin_development)
