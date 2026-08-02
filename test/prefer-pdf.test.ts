@@ -55,4 +55,43 @@ describe("prefer PDF", function () {
       "Selected PDF should become older than the previous preferred PDF",
     );
   });
+
+  it("should ignore non-PDF attachments when finding the oldest", async function () {
+    const parentItem = new Zotero.Item("journalArticle");
+    parentItem.setField("title", "Mixed attachments test");
+    parentItem.setField("url", "https://example.com/article");
+    await parentItem.saveTx();
+
+    // Create a non-PDF attachment with a very old date
+    const link = new Zotero.Item("attachment");
+    link.libraryID = parentItem.libraryID;
+    link.parentItemID = parentItem.id;
+    link.attachmentLinkMode = Zotero.Attachments.LINK_MODE_LINKED_URL;
+    link.attachmentContentType = "text/html";
+    link.setField("title", "Webpage");
+    link.setField("url", "https://example.com/page");
+    await link.saveTx();
+    link.dateAdded = new Date("2020-01-01T00:00:00.000Z").toISOString();
+    await link.saveTx();
+
+    const pdf = await createPDFAttachment(parentItem, {
+      path: "/tmp/test.pdf",
+      title: "Test PDF",
+      url: "https://example.com/test.pdf",
+    });
+
+    await plugin.api.preferPDF(pdf);
+
+    const updatedPDF = await Zotero.Items.getAsync(pdf.id);
+    assert.equal(
+      updatedPDF.getField("url"),
+      parentItem.getField("url"),
+      "PDF should inherit parent URL even with older non-PDF sibling",
+    );
+    assert.isAbove(
+      new Date(updatedPDF.dateAdded).getTime(),
+      new Date(link.dateAdded).getTime(),
+      "Non-PDF attachments should be ignored when computing oldest date",
+    );
+  });
 });

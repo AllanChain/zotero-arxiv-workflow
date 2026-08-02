@@ -21,6 +21,7 @@ export async function createLinkAttachment(
     url: string;
     title: string;
     contentType?: string;
+    snapshot?: boolean;
   },
 ) {
   return await Zotero.Attachments.linkFromURL({
@@ -28,6 +29,7 @@ export async function createLinkAttachment(
     url: options.url,
     title: options.title,
     contentType: options.contentType,
+    snapshot: options.snapshot,
   });
 }
 
