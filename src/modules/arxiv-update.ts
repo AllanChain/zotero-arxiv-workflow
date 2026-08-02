@@ -119,7 +119,10 @@ async function createItemByZotero(
     const translators = await translate.getTranslators();
     translate.setTranslator(translators);
   }
-  const libraryID = Zotero.getActiveZoteroPane()!.getSelectedLibraryID();
+  const pane = Zotero.getActiveZoteroPane()!;
+  const libraryID = pane.getSelectedLibraryIDs
+    ? pane.getSelectedLibraryIDs()[0]
+    : pane.getSelectedLibraryID();
   const items = await translate.translate({
     libraryID,
     collections,
@@ -213,11 +216,12 @@ export class arXivUpdate {
       if (paper === undefined) return reportProgress("up-to-date");
       // Download published version
       reportProgress("downloading-metadata");
-      const collection = Zotero.getActiveZoteroPane()?.getSelectedCollection();
-      let collections: number[] = [];
-      if (collection) {
-        collections = [collection.id];
-      }
+      const pane = Zotero.getActiveZoteroPane();
+      const collections = pane?.getSelectedCollections
+        ? pane.getSelectedCollections(true)
+        : pane?.getSelectedCollection
+          ? [pane.getSelectedCollection(true)]
+          : [];
       const journalItem = await createItemByZotero(paper, collections);
       if (!journalItem) return reportProgress("download-error");
       journalItem.saveTx();
@@ -324,6 +328,7 @@ export class arXivUpdate {
             label: getString("update-window", "col-status"),
             // @ts-expect-error: renderer is not typed
             renderer: arXivUpdate.renderStatusCell, // For Zotero 7.1+
+            renderCell: arXivUpdate.renderStatusCell, // For Zotero 10+
           },
         ],
         containerWidth: 500,

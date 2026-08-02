@@ -66,7 +66,10 @@ export async function createItemByDOI(
   translate.setIdentifier({ DOI: doi });
   const translators = await translate.getTranslators();
   translate.setTranslator(translators);
-  const libraryID = Zotero.getActiveZoteroPane().getSelectedLibraryID();
+  const pane = Zotero.getActiveZoteroPane()!;
+  const libraryID = pane.getSelectedLibraryIDs
+    ? pane.getSelectedLibraryIDs()[0]
+    : pane.getSelectedLibraryID();
   const items = await translate.translate({
     libraryID,
     saveAttachments: false,
