@@ -3,7 +3,16 @@ import { config } from "../package.json";
 
 export function getPlugin(): Addon {
   // @ts-expect-error string access not typed
-  return Zotero[config.addonInstance];
+  const plugin = Zotero[config.addonInstance] as Addon;
+  // Source modules imported directly by tests (e.g. `arxiv-merge.ts`,
+  // `manager.ts`) reference the ambient `addon` and `ztoolkit` globals at
+  // runtime. Those globals are defined by `src/index.ts` in the plugin
+  // sandbox realm, which is a *different* realm than the one the test
+  // modules run in, so surface them here explicitly.
+  (globalThis as unknown as { addon: Addon }).addon = plugin;
+  (globalThis as unknown as { ztoolkit: ZToolkit }).ztoolkit =
+    plugin.data.ztoolkit;
+  return plugin;
 }
 
 export async function getAllItems() {
@@ -66,7 +75,7 @@ export async function createItemByDOI(
   translate.setIdentifier({ DOI: doi });
   const translators = await translate.getTranslators();
   translate.setTranslator(translators);
-  const libraryID = Zotero.getActiveZoteroPane().getSelectedLibraryID();
+  const libraryID = Zotero.getActiveZoteroPane().getSelectedLibraryIDs()[0];
   const items = await translate.translate({
     libraryID,
     saveAttachments: false,
