@@ -2,9 +2,8 @@ import { assert } from "chai";
 import {
   diceSimilarity,
   evaluateTitlePair,
-  extractLastName,
   extractYear,
-  firstAuthorMatches,
+  firstAuthorSurnameMatches,
   FUZZY_TITLE_THRESHOLD,
   normalizeTitle,
   yearGatePasses,
@@ -59,51 +58,46 @@ describe("title-match", function () {
     });
   });
 
-  describe("extractLastName", function () {
-    it("handles DBLP 'First Last' format", function () {
-      assert.equal(extractLastName("Michael I. Jordan"), "jordan");
-    });
-
-    it("handles DBLP 'Last, First' format", function () {
-      assert.equal(extractLastName("Jordan, Michael I."), "jordan");
-    });
-
-    it("handles PubMed initials format", function () {
-      assert.equal(extractLastName("Jordan MI"), "jordan");
-      assert.equal(extractLastName("Jordan M"), "jordan");
-      assert.equal(extractLastName("Jordan M Jr"), "jordan");
-    });
-
-    it("keeps single-name and org authors", function () {
-      assert.equal(extractLastName("OpenAI"), "openai");
-      assert.equal(extractLastName("Li"), "li");
-    });
-
-    it("drops DBLP author-disambiguation suffixes", function () {
-      assert.equal(extractLastName("Nikhil Vyas 0001"), "vyas");
-      assert.equal(extractLastName("Nikola B. Kovachki 0001"), "kovachki");
-      assert.equal(extractLastName("Vyas 0001"), "vyas");
-    });
-
-    it("returns undefined for missing names", function () {
-      assert.equal(extractLastName(undefined), undefined);
-      assert.equal(extractLastName(""), undefined);
-    });
-  });
-
-  describe("firstAuthorMatches", function () {
+  describe("firstAuthorSurnameMatches", function () {
     it("matches across author string formats", function () {
-      assert.isTrue(firstAuthorMatches("Jordan", "Jordan MI"));
-      assert.isTrue(firstAuthorMatches("Jordan", "Michael I. Jordan"));
-      assert.isTrue(firstAuthorMatches("Jordan", "Jordan, Michael I."));
-      assert.isTrue(firstAuthorMatches("Vyas", "Nikhil Vyas 0001"));
-      assert.isTrue(firstAuthorMatches("van der Berg", "van der Berg"));
+      assert.isTrue(firstAuthorSurnameMatches("Jordan", "Jordan MI"));
+      assert.isTrue(firstAuthorSurnameMatches("Jordan", "Michael I. Jordan"));
+      assert.isTrue(firstAuthorSurnameMatches("Jordan", "Jordan, Michael I."));
+      assert.isTrue(firstAuthorSurnameMatches("Vyas", "Nikhil Vyas 0001"));
+      assert.isTrue(firstAuthorSurnameMatches("van der Berg", "van der Berg"));
+    });
+
+    it("keeps short surnames without mis-dropping them", function () {
+      assert.isTrue(firstAuthorSurnameMatches("Hu", "X Hu"));
+      assert.isTrue(firstAuthorSurnameMatches("Hu", "Hu, X"));
+      assert.isTrue(firstAuthorSurnameMatches("Xu", "Xu J"));
+      assert.isFalse(firstAuthorSurnameMatches("Hu", "Michael I. Jordan"));
+      assert.isFalse(firstAuthorSurnameMatches("Li", "Liang Z"));
+    });
+
+    it("uses only the words before the first comma (the first author)", function () {
+      assert.isTrue(
+        firstAuthorSurnameMatches(
+          "Gu",
+          "Shixiang Shane Gu, Machel Reid, Yutaka Matsuo",
+        ),
+      );
+      assert.isTrue(
+        firstAuthorSurnameMatches("Jia", "Jia Y, Yuan Z, Zhu L, Han B"),
+      );
+      assert.isFalse(
+        firstAuthorSurnameMatches(
+          "Reid",
+          "Shixiang Shane Gu, Machel Reid, Yutaka Matsuo",
+        ),
+      );
+      assert.isFalse(firstAuthorSurnameMatches("Zhu", "Jia Y, Yuan Z"));
     });
 
     it("rejects mismatched or missing authors", function () {
-      assert.isFalse(firstAuthorMatches("Li", "Jordan"));
-      assert.isFalse(firstAuthorMatches(undefined, "Jordan"));
-      assert.isFalse(firstAuthorMatches("Jordan", undefined));
+      assert.isFalse(firstAuthorSurnameMatches("Li", "Jordan"));
+      assert.isFalse(firstAuthorSurnameMatches(undefined, "Jordan"));
+      assert.isFalse(firstAuthorSurnameMatches("Jordan", undefined));
     });
   });
 

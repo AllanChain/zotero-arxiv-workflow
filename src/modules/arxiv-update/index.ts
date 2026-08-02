@@ -52,6 +52,10 @@ export class arXivUpdate {
     addon.data.arXivUpdate.manager.enqueue(
       Array.isArray(preprintItem) ? preprintItem : [preprintItem],
     );
-    UpdateDialog.refreshOrOpen(options);
+    UpdateDialog.refreshOrOpen(
+      addon.data.arXivUpdate.manager,
+      ztoolkit,
+      options,
+    );
   }
 }

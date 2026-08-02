@@ -1,26 +1,33 @@
 import { assert } from "chai";
 import type Addon from "../src/addon";
-import { getPlugin } from "./helpers";
+import { getPlugin, setPluginPref, clearPluginPref } from "./helpers";
 import { UpdateDialog } from "../src/modules/arxiv-update/update-dialog";
-import type { UpdateManager } from "../src/modules/arxiv-update/manager";
-import type { PaperIdentifier } from "../src/types";
-import { config } from "../package.json";
+import {
+  UpdateManager,
+  type PaperFinderProvider,
+} from "../src/modules/arxiv-update/manager";
+import { PaperIdentifier, isTentativePaperIdentifier } from "../src/types";
 
-type ImportAndMerge = (
-  preprint: Zotero.Item,
-  paper: PaperIdentifier,
-  id: number,
-) => Promise<void>;
+import { config } from "../package.json";
 
 describe("update-dialog-ui", function () {
   let plugin: Addon;
-  // `importAndMerge` performs a real network import when a candidate is
-  // confirmed. Stub it on the manager so the confirm flow is deterministic
-  // and offline, and capture the arguments to verify the pending candidate
-  // is actually passed through.
-  let originalImportAndMerge: ImportAndMerge | undefined;
-  let importCalls: { preprint: Zotero.Item; paper: PaperIdentifier }[] = [];
+  // The manager under test is built fresh with injected fakes: the real
+  // `importPublished` performs a network translate when a candidate is
+  // confirmed, so the fake records the arguments (to verify the pending
+  // candidate is passed through) and returns a locally-created journal item,
+  // letting the rest of the merge flow run offline.
+  let manager: UpdateManager;
+  let importCalls: { paper: PaperIdentifier }[] = [];
+  // Journal items created by the fake `importPublished`. A successful merge
+  // absorbs them; erase any leftover in `afterEach` if a test fails midway.
+  let createdJournalItems: Zotero.Item[] = [];
   this.timeout(60000);
+
+  const defaultPaperFinder: PaperFinderProvider = {
+    find: async () => undefined,
+    arXivPDF: async () => undefined,
+  };
 
   function candidate(
     id: number,
@@ -71,8 +78,21 @@ describe("update-dialog-ui", function () {
     return item;
   }
 
-  function manager(): UpdateManager {
-    return plugin.data.arXivUpdate.manager;
+  /** A manager with offline fakes; pass a `paperFinder` to customize the fallback. */
+  function makeManager(paperFinder: PaperFinderProvider = defaultPaperFinder) {
+    return new UpdateManager({
+      concurrency: 1,
+      paperFinder,
+      importPublished: async (paper) => {
+        importCalls.push({ paper });
+        const journalItem = new Zotero.Item("journalArticle");
+        journalItem.setField("title", paper.title);
+        await journalItem.saveTx();
+        createdJournalItems.push(journalItem);
+        return { journalItem, pdfError: false };
+      },
+      log: () => {},
+    });
   }
 
   async function waitForWindow(minRows: number): Promise<WindowProxy> {
@@ -95,7 +115,7 @@ describe("update-dialog-ui", function () {
             new Error(
               `update dialog never rendered ${minRows} rows; ` +
                 `window=${w !== undefined}, closed=${w?.closed}, ` +
-                `rows=${manager().getRows().length}, ` +
+                `rows=${manager.getRows().length}, ` +
                 `tableHelper=${UpdateDialog.tableHelper !== undefined}`,
             ),
           );
@@ -201,42 +221,40 @@ describe("update-dialog-ui", function () {
     UpdateDialog.window = undefined;
     UpdateDialog.tableHelper = undefined;
     UpdateDialog.tableChangeListener = undefined;
-    manager().reset();
+    manager.reset();
   }
 
   beforeEach(async function () {
     plugin = getPlugin();
-    // The test bundle is a separate module graph from the plugin's bundled
-    // code, so make the bare `addon` global resolve to the live plugin.
+    // `getString` (utils/locale.ts) reads the ambient `addon` singleton for
+    // the Fluent bundle; that template pattern keeps it there. This is the
+    // only remaining ambient dependency: the dialog and manager receive
+    // their collaborators explicitly.
     (globalThis as any).addon = plugin;
-    // `UpdateDialog.open()` builds the virtualized table through the toolkit
-    // helper, which is only defined in the plugin sandbox by default.
-    (globalThis as any).ztoolkit = plugin.data.ztoolkit;
     importCalls = [];
-    const mgr = manager() as unknown as { importAndMerge: ImportAndMerge };
-    originalImportAndMerge = mgr.importAndMerge;
-    mgr.importAndMerge = async (preprint, paper) => {
-      importCalls.push({ preprint, paper });
-      const row = manager().getRow(preprint.id);
-      if (row) {
-        row.status = "updated";
-      }
-    };
+    createdJournalItems = [];
+    // Disable the arXiv self-update so skip stays deterministic (no network).
+    setPluginPref("updateSource.arXiv", false);
+    manager = makeManager();
     await resetState();
   });
 
   afterEach(async function () {
-    const mgr = manager() as unknown as { importAndMerge: ImportAndMerge };
-    if (originalImportAndMerge) {
-      mgr.importAndMerge = originalImportAndMerge;
-    }
+    clearPluginPref("updateSource.arXiv");
     await resetState();
+    for (const item of createdJournalItems) {
+      try {
+        await item.eraseTx();
+      } catch {
+        // Already absorbed by the merge or otherwise gone.
+      }
+    }
   });
 
   it("click-to-check opens the dialog and confirm triggers the merge", async function () {
     const item = await makeItem("The Quick Brown Fox", "2409.11321");
     const candidateURL = "https://openreview.net/forum?id=example123";
-    manager()
+    manager
       .getRows()
       .push(
         candidate(
@@ -248,7 +266,7 @@ describe("update-dialog-ui", function () {
         ),
       );
 
-    await UpdateDialog.open();
+    await UpdateDialog.open(manager, plugin.data.ztoolkit);
     const win = await waitForWindow(1);
     const statusCell = win.document.querySelector(
       `#${config.addonRef}-status-table .row .cell.clickable`,
@@ -333,22 +351,26 @@ describe("update-dialog-ui", function () {
     // drain before asserting the row left the pending state.
     await waitForCondition(
       "row to reach updated status",
-      () => manager().getRow(item.id)?.status === "updated",
+      () => manager.getRow(item.id)?.status === "updated",
     );
 
     assert.equal(importCalls.length, 1, "confirm should import and merge once");
-    assert.equal(importCalls[0]!.preprint.id, item.id);
     const mergedDOI = importCalls[0]!.paper.doi;
     assert.equal(mergedDOI, `10.5555/example-doi-${item.id}`);
     assert.equal(importCalls[0]!.paper.title, "Published PDF");
-    assert.equal(importCalls[0]!.paper.tentative, true);
+    const confirmedPaper = importCalls[0]!.paper;
+    assert.equal(confirmedPaper.tentative, true);
+    assert.ok(
+      isTentativePaperIdentifier(confirmedPaper),
+      "confirmed candidate should be tentative",
+    );
     assert.equal(
-      importCalls[0]!.paper.candidate?.candidateTitle,
+      confirmedPaper.candidate.candidateTitle,
       "The Lazy Brown Dog",
       "the confirmed candidate should be passed to the merge",
     );
 
-    const data = manager().getRow(item.id);
+    const data = manager.getRow(item.id);
     assert.equal(data?.status, "updated");
     assert.equal(data?.pendingPaper, undefined);
     await item.eraseTx();
@@ -356,7 +378,7 @@ describe("update-dialog-ui", function () {
 
   it("dialog without a candidate URL hides the review link", async function () {
     const item = await makeItem("Paper Number Six", "2409.00006");
-    manager()
+    manager
       .getRows()
       .push(
         candidate(
@@ -368,7 +390,7 @@ describe("update-dialog-ui", function () {
         ),
       );
 
-    await UpdateDialog.open();
+    await UpdateDialog.open(manager, plugin.data.ztoolkit);
     const win = await waitForWindow(1);
     const dialog = await clickLinkAndWait(win);
 
@@ -389,43 +411,72 @@ describe("update-dialog-ui", function () {
     dialogButton(dialog, "extra1").click();
     await waitForCondition(
       "row to become up-to-date",
-      () => manager().getRow(item.id)?.status === "up-to-date",
+      () => manager.getRow(item.id)?.status === "up-to-date",
     );
     await item.eraseTx();
   });
 
   it("skip button in the dialog marks the row up-to-date", async function () {
     const item = await makeItem("Paper Number Two", "2409.00002");
-    manager().getRows().push(candidate(item.id, item.getDisplayTitle()));
+    manager.getRows().push(candidate(item.id, item.getDisplayTitle()));
 
-    await UpdateDialog.open();
+    await UpdateDialog.open(manager, plugin.data.ztoolkit);
     const win = await waitForWindow(1);
     const dialog = await clickLinkAndWait(win);
 
     dialogButton(dialog, "extra1").click();
     await waitForCondition(
       "row to become up-to-date",
-      () => manager().getRow(item.id)?.status === "up-to-date",
+      () => manager.getRow(item.id)?.status === "up-to-date",
     );
 
-    const data = manager().getRow(item.id);
+    const data = manager.getRow(item.id);
     assert.equal(data?.status, "up-to-date");
     assert.equal(data?.pendingPaper, undefined);
     await item.eraseTx();
   });
 
+  it("skipping runs the arXiv self-update fallback when enabled", async function () {
+    const item = await makeItem("Paper Number Seven", "2409.00007");
+    manager = makeManager({
+      find: async () => undefined,
+      arXivPDF: async (preprintItem) => {
+        assert.equal(preprintItem.id, item.id);
+        return {
+          url: preprintItem.getField("url"),
+          title: "v2 PDF",
+        } satisfies PaperIdentifier;
+      },
+    });
+    manager.getRows().push(candidate(item.id, item.getDisplayTitle()));
+    setPluginPref("updateSource.arXiv", true);
+
+    await UpdateDialog.open(manager, plugin.data.ztoolkit);
+    const win = await waitForWindow(1);
+    const dialog = await clickLinkAndWait(win);
+    dialogButton(dialog, "extra1").click();
+
+    await waitForCondition(
+      "row to reach updated status via arXiv self-update",
+      () => manager.getRow(item.id)?.status === "updated",
+    );
+    assert.equal(importCalls.length, 1, "skip should import and merge once");
+    assert.equal(importCalls[0]!.paper.title, "v2 PDF");
+    await item.eraseTx();
+  });
+
   it("closing the confirmation dialog leaves the row pending", async function () {
     const item = await makeItem("Paper Number Three", "2409.00003");
-    manager().getRows().push(candidate(item.id, item.getDisplayTitle()));
+    manager.getRows().push(candidate(item.id, item.getDisplayTitle()));
 
-    await UpdateDialog.open();
+    await UpdateDialog.open(manager, plugin.data.ztoolkit);
     const win = await waitForWindow(1);
     const dialog = await clickLinkAndWait(win);
 
     dialog.close();
     await Zotero.Promise.delay(300);
 
-    const data = manager().getRow(item.id);
+    const data = manager.getRow(item.id);
     assert.equal(
       data?.status,
       "needs-confirmation",
@@ -437,9 +488,9 @@ describe("update-dialog-ui", function () {
 
   it("double-clicking the link opens only one dialog", async function () {
     const item = await makeItem("Paper Number Four", "2409.00004");
-    manager().getRows().push(candidate(item.id, item.getDisplayTitle()));
+    manager.getRows().push(candidate(item.id, item.getDisplayTitle()));
 
-    await UpdateDialog.open();
+    await UpdateDialog.open(manager, plugin.data.ztoolkit);
     const win = await waitForWindow(1);
     const link = win.document.querySelector<HTMLElement>(
       `#${config.addonRef}-status-table .row .cell.clickable .candidate-link`,
@@ -466,14 +517,14 @@ describe("update-dialog-ui", function () {
 
   it("window close keeps pending candidates", async function () {
     const item = await makeItem("Paper Number Five", "2409.00005");
-    manager().getRows().push(candidate(item.id, item.getDisplayTitle()));
+    manager.getRows().push(candidate(item.id, item.getDisplayTitle()));
 
-    await UpdateDialog.open();
+    await UpdateDialog.open(manager, plugin.data.ztoolkit);
     const win = await waitForWindow(1);
     win.close();
     await Zotero.Promise.delay(300);
 
-    const data = manager().getRow(item.id);
+    const data = manager.getRow(item.id);
     assert.equal(
       data?.status,
       "needs-confirmation",

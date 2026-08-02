@@ -2,11 +2,15 @@ import { getPref } from "../../utils/prefs";
 import {
   evaluateTitlePair,
   extractYear,
-  firstAuthorMatches,
+  firstAuthorSurnameMatches,
   yearGatePasses,
 } from "../../utils/title-match";
 import { fetchJSONBounded, fetchTextBounded } from "../../utils/http";
-import { PaperIdentifier } from "../../types";
+import {
+  PaperIdentifier,
+  TentativePaperIdentifier,
+  isTentativePaperIdentifier,
+} from "../../types";
 
 export const KNOWN_PREPRINT_SERVERS = {
   arxiv: "arxiv.org",
@@ -18,27 +22,74 @@ export const KNOWN_PREPRINT_SERVERS = {
 
 const PUBMED_CANDIDATE_LIMIT = 10;
 
-interface BestCandidate {
-  paper: PaperIdentifier;
-  score: number;
-  year: number | undefined;
-  hasDOI: boolean;
+// Narrow typed views of the external API responses the finders actually read.
+interface DBLPHitInfo {
+  title?: string;
+  venue?: string;
+  year?: string;
+  doi?: string;
+  ee?: string;
+  url?: string;
+  key?: string;
+  authors?: { author?: { text?: string } | Array<{ text?: string }> };
+}
+
+interface PubMedPaper {
+  title?: string;
+  pubdate?: string;
+  fulljournalname?: string;
+  authors?: Array<{ name?: string }>;
+  articleids?: Array<{ idtype?: string; value?: string }>;
+}
+
+/** Shared fuzzy gates for DBLP and PubMed: author must match, and the
+ * published year cannot predate the preprint. Returns a reject reason to log,
+ * or undefined when the candidate passes and may be considered. */
+function fuzzyGateReason(
+  preprintItem: Zotero.Item,
+  candidateFirstAuthor: string | undefined,
+  candidateYear: string | undefined,
+): string | undefined {
+  const preprintFirstAuthor = preprintItem.getCreators()[0]?.lastName;
+  if (!firstAuthorSurnameMatches(preprintFirstAuthor, candidateFirstAuthor)) {
+    return "author mismatch";
+  }
+  if (!yearGatePasses(preprintItem.getField("year"), candidateYear)) {
+    return "year gate";
+  }
+  return undefined;
 }
 
 // Keep the strongest fuzzy candidate: higher similarity wins, then a DOI,
-// then the most recent year.
+// then the most recent year. All ranking metadata lives on the candidate
+// itself (`candidate.score`, `candidate.year`, `doi`), so we rank the tagged
+// `TentativePaperIdentifier` directly with no wrapper.
 function isBetterCandidate(
-  current: BestCandidate | undefined,
-  next: BestCandidate,
+  current: TentativePaperIdentifier | undefined,
+  next: TentativePaperIdentifier,
 ): boolean {
   if (!current) return true;
-  if (next.score !== current.score) return next.score > current.score;
-  if (next.hasDOI !== current.hasDOI) return next.hasDOI;
-  return (next.year ?? -1) > (current.year ?? -1);
+  if (next.candidate.score !== current.candidate.score) {
+    return next.candidate.score > current.candidate.score;
+  }
+  if (Boolean(next.doi) !== Boolean(current.doi)) return Boolean(next.doi);
+  return (
+    (extractYear(next.candidate.year) ?? -1) >
+    (extractYear(current.candidate.year) ?? -1)
+  );
 }
 
-function pubmedDOI(info: any): string | undefined {
-  for (const idInfo of info?.articleids ?? []) {
+/** Resolve a hostname, returning undefined for a malformed URL. */
+function safeHost(url: string): string | undefined {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+function pubmedDOI(info: PubMedPaper): string | undefined {
+  for (const idInfo of info.articleids ?? []) {
     if (idInfo.idtype === "doi") return idInfo.value;
   }
   return undefined;
@@ -48,11 +99,16 @@ export class PaperFinder {
   preprintURL: string;
   title: string;
   item: Zotero.Item;
+  private log: (...args: unknown[]) => void;
 
-  constructor(preprintItem: Zotero.Item) {
+  constructor(
+    preprintItem: Zotero.Item,
+    log: (...args: unknown[]) => void = ztoolkit.log,
+  ) {
     this.item = preprintItem;
     this.preprintURL = preprintItem.getField("url");
     this.title = preprintItem.getDisplayTitle();
+    this.log = log;
     const urlHost = new URL(this.preprintURL).hostname;
     if (!Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost)) {
       throw `${this.preprintURL} is not a valid preprint server URL`;
@@ -60,7 +116,9 @@ export class PaperFinder {
   }
 
   async find(): Promise<PaperIdentifier | undefined> {
-    const finders: {
+    // Published-version finders, in priority order: a definitive result wins,
+    // otherwise the first fuzzy match is held for user confirmation.
+    const publishedFinders: {
       name: string;
       enabled: boolean;
       run: () => Promise<PaperIdentifier | undefined>;
@@ -85,30 +143,33 @@ export class PaperFinder {
         enabled: getPref("updateSource.pubmed"),
         run: () => this.pubMed(),
       },
-      {
-        name: "arXivPDF",
-        enabled: getPref("updateSource.arXiv"),
-        run: () => this.arXivPDF(),
-      },
     ];
-    // A fuzzy (tentative) match needs user confirmation. A definitive result
-    // from a later finder still wins, but the arXiv self-update is strictly
-    // worse than a published-version candidate and must not override it.
-    let tentative: PaperIdentifier | undefined;
-    for (const finder of finders) {
+    // Collect fuzzy candidates from every enabled finder and keep only the best
+    // one across sources, so e.g. a strong PubMed result wins over a weak DBLP
+    // one regardless of finder order. A definitive result still short-circuits.
+    let best: TentativePaperIdentifier | undefined;
+    for (const finder of publishedFinders) {
       if (!finder.enabled) continue;
-      if (tentative && finder.name === "arXivPDF") break;
       const result = await finder
         .run()
-        .catch((e) => ztoolkit.log(finder.name, "failed:", String(e)));
+        .catch((e) => this.log(finder.name, "failed:", String(e)));
       if (!result) continue;
-      if (result.tentative) {
-        if (!tentative) tentative = result;
+      if (isTentativePaperIdentifier(result)) {
+        if (isBetterCandidate(best, result)) best = result;
         continue;
       }
       return result;
     }
-    return tentative;
+    if (best) {
+      this.log(
+        `Tentative match "${best.candidate.candidateTitle}" (score=${best.candidate.score})`,
+      );
+      return best;
+    }
+    // Last resort: self-update the arXiv abstract's own published version.
+    // The arXiv self-update is strictly worse than a published-version
+    // candidate, so it only runs when there is no tentative match at all.
+    return getPref("updateSource.arXiv") ? this.arXivPDF() : undefined;
   }
 
   async relatedDOI(): Promise<PaperIdentifier | undefined> {
@@ -175,21 +236,24 @@ export class PaperFinder {
     // the first author whenever the item has one.
     const firstAuthor = this.item.getCreators()[0]?.lastName;
     const query = firstAuthor ? `${this.title} ${firstAuthor}` : this.title;
-    ztoolkit.log(`DBLP query: ${query}`);
+    this.log(`DBLP query: ${query}`);
     const dblpURL = `${dblpAPI}?q=${encodeURIComponent(query)}&format=json&h=100`;
-    const json = await fetchJSONBounded(dblpURL);
-    const hits = json?.result?.hits?.hit ?? [];
-    ztoolkit.log(`DBLP returned ${hits.length} hits`);
-    let bestCandidate: BestCandidate | undefined;
+    const json = await fetchJSONBounded<{
+      result?: { hits?: { hit?: Array<{ info?: DBLPHitInfo }> } };
+    }>(dblpURL);
+    const hits = json.result?.hits?.hit ?? [];
+    this.log(`DBLP returned ${hits.length} hits`);
+    let bestCandidate: TentativePaperIdentifier | undefined;
     for (const hit of hits) {
       const info = hit?.info;
-      const title = info?.title;
+      if (!info) continue;
+      const title = info.title;
       if (typeof title !== "string") continue;
       const match = evaluateTitlePair(this.title, title);
       if (match.kind === "reject") continue;
       // Ignore this DBLP entry if it belongs to CoRR. See also #14
       if (info.venue === "CoRR") {
-        ztoolkit.log(`DBLP: skipping CoRR record ${info.key}`);
+        this.log(`DBLP: skipping CoRR record ${info.key}`);
         continue;
       }
       const hasDOI =
@@ -199,7 +263,7 @@ export class PaperFinder {
         // Prefer the DOI when DBLP has one: importing by identifier is more
         // robust than scraping an arbitrary publisher page.
         if (hasDOI) {
-          ztoolkit.log(`DBLP matched ${info.key} via DOI ${info.doi}`);
+          this.log(`DBLP matched ${info.key} via DOI ${info.doi}`);
           return { doi: info.doi, title: "Published PDF" };
         }
         // Prefer electron edition (ee) which points to the official website
@@ -208,9 +272,10 @@ export class PaperFinder {
         if (!url) continue;
         // Records without a real venue page (e.g. early ICLR) point back to
         // arXiv itself; updating from them would re-import the preprint.
-        const host = new URL(url).hostname;
+        const host = safeHost(url);
+        if (!host) continue; // malformed URL: skip this record
         if (host === "arxiv.org" || host.endsWith(".arxiv.org")) {
-          ztoolkit.log(`DBLP: skipping arXiv-hosted record ${info.key}`);
+          this.log(`DBLP: skipping arXiv-hosted record ${info.key}`);
           continue;
         }
         // openreview.net serves a script-only page behind an anti-bot
@@ -219,7 +284,7 @@ export class PaperFinder {
         if (host === "openreview.net" || host.endsWith(".openreview.net")) {
           url = `https://dblp.org/rec/${info.key}.html?view=bibtex`;
         }
-        ztoolkit.log(
+        this.log(
           `DBLP matched ${info.key} (${info.venue} ${info.year}): ${url}`,
         );
         return { url, title: "Published PDF" };
@@ -230,64 +295,55 @@ export class PaperFinder {
       const firstAuthorName = Array.isArray(dblpAuthors)
         ? dblpAuthors[0]?.text
         : dblpAuthors?.text;
-      if (!firstAuthorMatches(firstAuthor, firstAuthorName)) {
-        ztoolkit.log(
-          `DBLP: fuzzy candidate ${info.key} rejected (author mismatch)`,
-        );
-        continue;
-      }
-      if (!yearGatePasses(this.item.getField("year"), info.year)) {
-        ztoolkit.log(`DBLP: fuzzy candidate ${info.key} rejected (year gate)`);
+      const gateReason = fuzzyGateReason(this.item, firstAuthorName, info.year);
+      if (gateReason) {
+        this.log(`DBLP: fuzzy candidate ${info.key} rejected (${gateReason})`);
         continue;
       }
       let url = info.ee || info.url;
       if (!hasDOI && !url) continue;
       if (url) {
-        const host = new URL(url).hostname;
+        const host = safeHost(url);
+        if (!host) continue; // malformed URL: skip this record
         if (host === "arxiv.org" || host.endsWith(".arxiv.org")) {
-          ztoolkit.log(`DBLP: skipping arXiv-hosted record ${info.key}`);
+          this.log(`DBLP: skipping arXiv-hosted record ${info.key}`);
           continue;
         }
         if (host === "openreview.net" || host.endsWith(".openreview.net")) {
           url = `https://dblp.org/rec/${info.key}.html?view=bibtex`;
         }
       }
-      const candidate: BestCandidate = {
-        paper: {
-          ...(hasDOI ? { doi: info.doi } : { url: url as string }),
-          title: "Published PDF",
-          tentative: true,
-          candidate: {
-            source: "DBLP",
-            candidateTitle: title,
-            publication: info.venue,
-            year: info.year,
-            score: match.score,
-            // Human-review link: the publisher page or the DBLP record page,
-            // falling back to the DOI resolver when the record has no page.
-            // This is independent of `url` above, which may have been
-            // rewritten to the DBLP BibTeX view for OpenReview imports.
-            url:
-              info.ee ||
-              info.url ||
-              (hasDOI ? `https://doi.org/${info.doi}` : undefined),
-          },
+      const candidate: TentativePaperIdentifier = {
+        ...(hasDOI ? { doi: info.doi } : { url: url as string }),
+        title: "Published PDF",
+        tentative: true,
+        candidate: {
+          source: "DBLP",
+          candidateTitle: title,
+          publication: info.venue,
+          year: info.year,
+          score: match.score,
+          // Human-review link: the publisher page or the DBLP record page,
+          // falling back to the DOI resolver when the record has no page.
+          // This is independent of `url` above, which may have been
+          // rewritten to the DBLP BibTeX view for OpenReview imports.
+          url:
+            info.ee ||
+            info.url ||
+            (hasDOI ? `https://doi.org/${info.doi}` : undefined),
         },
-        score: match.score,
-        year: extractYear(info.year),
-        hasDOI,
       };
       if (isBetterCandidate(bestCandidate, candidate)) {
         bestCandidate = candidate;
       }
     }
     if (bestCandidate) {
-      ztoolkit.log(
-        `DBLP: tentative match "${bestCandidate.paper.candidate?.candidateTitle}" (score=${bestCandidate.score})`,
+      this.log(
+        `DBLP: tentative match "${bestCandidate.candidate.candidateTitle}" (score=${bestCandidate.candidate.score})`,
       );
-      return bestCandidate.paper;
+      return bestCandidate;
     }
-    ztoolkit.log(`No published version found on DBLP for "${this.title}"`);
+    this.log(`No published version found on DBLP for "${this.title}"`);
     return undefined;
   }
 
@@ -295,8 +351,10 @@ export class PaperFinder {
     const pubMedSearchAPI =
       "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed";
     const pubMedSearchURL = `${pubMedSearchAPI}&term=${encodeURIComponent(this.title)}&retmode=json`;
-    const searchJson = await fetchJSONBounded(pubMedSearchURL);
-    const idList = searchJson?.esearchresult?.idlist ?? [];
+    const searchJson = await fetchJSONBounded<{
+      esearchresult?: { idlist?: string[] };
+    }>(pubMedSearchURL);
+    const idList = searchJson.esearchresult?.idlist ?? [];
     if (idList.length === 0) return undefined;
     // Relevance ranking is not perfect, so check several candidates instead
     // of only the first hit.
@@ -304,11 +362,12 @@ export class PaperFinder {
     const pubMedPaperAPI =
       "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed";
     const pubMedPaperURL = `${pubMedPaperAPI}&id=${paperIds.join(",")}&retmode=json`;
-    const paperJson = await fetchJSONBounded(pubMedPaperURL);
-    const firstAuthor = this.item.getCreators()[0]?.lastName;
-    let bestCandidate: BestCandidate | undefined;
+    const paperJson = await fetchJSONBounded<{
+      result?: Record<string, PubMedPaper>;
+    }>(pubMedPaperURL);
+    let bestCandidate: TentativePaperIdentifier | undefined;
     for (const paperId of paperIds) {
-      const info = paperJson?.result?.[paperId];
+      const info = paperJson.result?.[paperId];
       if (!info) continue;
       const title = info?.title;
       if (typeof title !== "string") continue;
@@ -317,54 +376,48 @@ export class PaperFinder {
       const doi = pubmedDOI(info);
       if (match.kind === "exact") {
         if (doi) {
-          ztoolkit.log(`PubMed matched ${paperId} via DOI ${doi}`);
+          this.log(`PubMed matched ${paperId} via DOI ${doi}`);
           return { doi, title: "Published PDF" };
         }
         continue; // Exact match without a DOI is not importable
       }
       const firstAuthorName = info.authors?.[0]?.name;
-      if (!firstAuthorMatches(firstAuthor, firstAuthorName)) {
-        ztoolkit.log(
-          `PubMed: fuzzy candidate ${paperId} rejected (author mismatch)`,
-        );
-        continue;
-      }
-      if (!yearGatePasses(this.item.getField("year"), info.pubdate)) {
-        ztoolkit.log(`PubMed: fuzzy candidate ${paperId} rejected (year gate)`);
+      const gateReason = fuzzyGateReason(
+        this.item,
+        firstAuthorName,
+        info.pubdate,
+      );
+      if (gateReason) {
+        this.log(`PubMed: fuzzy candidate ${paperId} rejected (${gateReason})`);
         continue;
       }
       if (!doi) continue;
-      const candidate: BestCandidate = {
-        paper: {
-          doi,
-          title: "Published PDF",
-          tentative: true,
-          candidate: {
-            source: "PubMed",
-            candidateTitle: title,
-            publication: info.fulljournalname,
-            year: info.pubdate,
-            score: match.score,
-            // PubMed's abstract page is free to view and lets the user verify
-            // the title, authors, and journal before confirming the match.
-            url: `https://pubmed.ncbi.nlm.nih.gov/${paperId}/`,
-          },
+      const candidate: TentativePaperIdentifier = {
+        doi,
+        title: "Published PDF",
+        tentative: true,
+        candidate: {
+          source: "PubMed",
+          candidateTitle: title,
+          publication: info.fulljournalname,
+          year: info.pubdate,
+          score: match.score,
+          // PubMed's abstract page is free to view and lets the user verify
+          // the title, authors, and journal before confirming the match.
+          url: `https://pubmed.ncbi.nlm.nih.gov/${paperId}/`,
         },
-        score: match.score,
-        year: extractYear(info.pubdate),
-        hasDOI: true,
       };
       if (isBetterCandidate(bestCandidate, candidate)) {
         bestCandidate = candidate;
       }
     }
     if (bestCandidate) {
-      ztoolkit.log(
-        `PubMed: tentative match "${bestCandidate.paper.candidate?.candidateTitle}" (score=${bestCandidate.score})`,
+      this.log(
+        `PubMed: tentative match "${bestCandidate.candidate.candidateTitle}" (score=${bestCandidate.candidate.score})`,
       );
-      return bestCandidate.paper;
+      return bestCandidate;
     }
-    ztoolkit.log(`No published version found on PubMed for "${this.title}"`);
+    this.log(`No published version found on PubMed for "${this.title}"`);
     return undefined;
   }
 
@@ -388,7 +441,7 @@ export class PaperFinder {
         localVersion = currentPDFVersion;
       }
     }
-    ztoolkit.log(`Current arXiv version: ${localVersion}`);
+    this.log(`Current arXiv version: ${localVersion}`);
     if (hasPDF && localVersion === 0) return undefined;
     const htmlContent = await fetchTextBounded(this.item.getField("url"));
     const match = htmlContent.match(/<strong>\[v(\d+)\]<\/strong>/);

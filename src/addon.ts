@@ -4,7 +4,11 @@ import { createZToolkit } from "./utils/ztoolkit";
 import { getPref } from "./utils/prefs";
 import { arXivMerge } from "./modules/arxiv-merge";
 import { arXivUpdate } from "./modules/arxiv-update";
-import { UpdateManager } from "./modules/arxiv-update/manager";
+import {
+  UpdateManager,
+  importPublishedVersion,
+} from "./modules/arxiv-update/manager";
+import { PaperFinder } from "./modules/arxiv-update/paper-finder";
 import { PreferPDF } from "./modules/prefer-pdf";
 import { UpdatePDF } from "./modules/update-pdf";
 
@@ -38,15 +42,23 @@ class Addon {
   };
 
   constructor() {
+    const ztoolkit = createZToolkit();
+    const log = (...args: unknown[]) => ztoolkit.log(...args);
     this.data = {
       alive: true,
       config,
       env: __env__,
       initialized: false,
-      ztoolkit: createZToolkit(),
+      ztoolkit,
       arXivUpdate: {
         manager: new UpdateManager({
           concurrency: getPref("update.concurrency"),
+          paperFinder: {
+            find: (item) => new PaperFinder(item, log).find(),
+            arXivPDF: (item) => new PaperFinder(item, log).arXivPDF(),
+          },
+          importPublished: importPublishedVersion,
+          log,
         }),
       },
     };

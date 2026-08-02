@@ -51,52 +51,39 @@ export function diceSimilarity(base: string, candidate: string): number {
   return (2 * intersection) / (tokensA.size + tokensB.size);
 }
 
-/**
- * Extract the last name from author strings in either common format:
- * "Michael I. Jordan", "Jordan, Michael I." (DBLP) or "Jordan MI" (PubMed).
- *
- * Trailing tokens that are not part of the family name are dropped:
- * - 1-2 character tokens are initials ("Jordan M Jr" -> "Jordan");
- * - all-digit tokens are DBLP's author-disambiguation suffix, appended when
- *   several authors share the same name ("Nikhil Vyas 0001" -> "Vyas").
- */
-export function extractLastName(name: string | undefined): string | undefined {
-  if (!name) return undefined;
-  const commaIndex = name.indexOf(",");
-  if (commaIndex !== -1) {
-    return extractLastName(name.slice(0, commaIndex));
-  }
-  const cleaned = name
-    .replace(/[^\p{L}\p{N}-]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-  if (!cleaned) return undefined;
-  const parts = cleaned.split(" ");
-  // "0001" in "Nikhil Vyas 0001" is a DBLP author ID, not the family name.
-  // Digits are kept by the normalizer above, so drop trailing digit tokens
-  // explicitly, just like trailing initials.
-  while (
-    parts.length > 1 &&
-    (parts[parts.length - 1].length <= 2 ||
-      /^\d+$/.test(parts[parts.length - 1]))
-  ) {
-    parts.pop();
-  }
-  return parts[parts.length - 1];
+/** Normalize an author string into lowercase word tokens, dropping numbers. */
+function authorTokens(name: string | undefined): string[] {
+  if (!name) return [];
+  return name
+    .toLowerCase()
+    .replace(/\d+/g, " ") // DBLP author disambiguation suffix, e.g. "0001"
+    .replace(/[^\p{L}]+/gu, " ")
+    .split(" ")
+    .filter(Boolean);
 }
 
-export function firstAuthorMatches(
-  arxivLastName: string | undefined,
-  candidateAuthorName: string | undefined,
+/**
+ * Match the arXiv first author's surname against the candidate's first author.
+ *
+ * The first author is whatever comes before the first comma in the author list
+ * (DBLP lists authors comma-separated; PubMed is harmless to split the same way).
+ * We then just check that the arXiv surname appears as one of those words, which
+ * covers both formats, short surnames, middle names, orderings, and suffix tokens.
+ */
+export function firstAuthorSurnameMatches(
+  arxivSurname: string | undefined,
+  candidateAuthorList: string | undefined,
 ): boolean {
-  const preprintLastName = extractLastName(arxivLastName);
-  const candidateLastName = extractLastName(candidateAuthorName);
-  return Boolean(
-    preprintLastName &&
-    candidateLastName &&
-    preprintLastName === candidateLastName,
-  );
+  const arxiv = authorTokens(arxivSurname);
+  if (arxiv.length === 0) return false;
+  const surname = arxiv[arxiv.length - 1]; // last token (handles compound names)
+  if (!candidateAuthorList) return false;
+  const commaIndex = candidateAuthorList.indexOf(",");
+  const firstAuthor =
+    commaIndex === -1
+      ? candidateAuthorList
+      : candidateAuthorList.slice(0, commaIndex);
+  return authorTokens(firstAuthor).includes(surname);
 }
 
 export function extractYear(

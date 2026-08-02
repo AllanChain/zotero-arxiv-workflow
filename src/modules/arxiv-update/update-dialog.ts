@@ -1,38 +1,12 @@
 import { config } from "../../../package.json";
 import { getString } from "../../utils/locale";
-import { UpdateStatus } from "../../types";
+import { isTentativePaperIdentifier } from "../../types";
 import { diffWords } from "diff";
 import type { VirtualizedTableHelper } from "zotero-plugin-toolkit";
-
-type SimpleUpdateStatus =
-  | "pending"
-  | "needs-confirmation"
-  | "processing"
-  | "up-to-date"
-  | "updated"
-  | "error";
+import type { UpdateManager } from "./manager";
+import { STATUS_META } from "./status";
 
 const htmlNS = "http://www.w3.org/1999/xhtml";
-
-function simplifyUpdateStatus(status: UpdateStatus): SimpleUpdateStatus {
-  switch (status) {
-    case "pending":
-      return "pending";
-    case "needs-confirmation":
-      return "needs-confirmation";
-    case "finding-update":
-    case "downloading-metadata":
-    case "downloading-pdf":
-      return "processing";
-    case "up-to-date":
-      return "up-to-date";
-    case "updated":
-      return "updated";
-    case "download-error":
-    case "general-error":
-      return "error";
-  }
-}
 
 export class UpdateDialog {
   /** Row id whose confirmation dialog is currently open; guards against stacking dialogs. */
@@ -41,17 +15,20 @@ export class UpdateDialog {
   static tableHelper?: VirtualizedTableHelper;
   /** Manager listener active while the update window is open. */
   static tableChangeListener?: () => void;
-
-  private static get manager() {
-    return addon.data.arXivUpdate.manager;
-  }
+  /** Manager and toolkit bound at `open()` and cleared when the window unloads. */
+  private static manager: UpdateManager | undefined;
+  private static toolkit: ZToolkit | undefined;
 
   // Refresh the open progress window with the latest queue state, or clear
   // finished rows and reopen the window when it is not available.
-  static refreshOrOpen(options: { openWindow?: boolean } = {}) {
+  static refreshOrOpen(
+    manager: UpdateManager,
+    toolkit: ZToolkit,
+    options: { openWindow?: boolean } = {},
+  ) {
     const window = UpdateDialog.window;
     const tableHelper = UpdateDialog.tableHelper;
-    ztoolkit.log(
+    toolkit.log(
       `Update dialog state: window=${window !== undefined}, closed=${window?.closed}, table=${tableHelper !== undefined}`,
     );
     if (window !== undefined && !window.closed && tableHelper !== undefined) {
@@ -63,14 +40,14 @@ export class UpdateDialog {
       });
     } else {
       // Clear finished rows and reopen the window otherwise
-      UpdateDialog.manager.retainActiveRows();
+      manager.retainActiveRows();
       if (options.openWindow ?? true) {
-        UpdateDialog.open();
+        UpdateDialog.open(manager, toolkit);
       }
     }
   }
 
-  static async open() {
+  static async open(manager: UpdateManager, toolkit: ZToolkit) {
     const loadLock = Zotero.Promise.defer();
     const window = Zotero.getMainWindow().openDialog(
       `chrome://${config.addonRef}/content/update-dialog.xhtml`,
@@ -79,9 +56,11 @@ export class UpdateDialog {
       { loadLock },
     )!;
     UpdateDialog.window = window;
+    UpdateDialog.manager = manager;
+    UpdateDialog.toolkit = toolkit;
     // React to manager row changes while this window is open.
     UpdateDialog.tableChangeListener = () => UpdateDialog.refreshTable();
-    UpdateDialog.manager.subscribe(UpdateDialog.tableChangeListener);
+    manager.subscribe(UpdateDialog.tableChangeListener);
     window.addEventListener("DOMContentLoaded", () => loadLock.resolve());
     await loadLock.promise;
 
@@ -89,12 +68,18 @@ export class UpdateDialog {
     // loads, so register the cleanup listener only after the load: from here
     // on, `unload` fires only when the window really closes.
     window.addEventListener("unload", () => {
-      UpdateDialog.unsubscribeFromManager();
+      const listener = UpdateDialog.tableChangeListener;
+      if (listener) {
+        manager.unsubscribe(listener);
+        UpdateDialog.tableChangeListener = undefined;
+      }
       UpdateDialog.window = undefined;
       UpdateDialog.tableHelper = undefined;
+      UpdateDialog.manager = undefined;
+      UpdateDialog.toolkit = undefined;
     });
 
-    UpdateDialog.tableHelper = new ztoolkit.VirtualizedTable(window)
+    UpdateDialog.tableHelper = new toolkit.VirtualizedTable(window)
       .setContainerId(`${config.addonRef}-status-container`)
       .setProp({
         id: `${config.addonRef}-status-table`,
@@ -119,33 +104,25 @@ export class UpdateDialog {
         staticColumns: true,
         showHeader: true,
         multiSelect: false,
-        getRowCount: () => UpdateDialog.manager.getRows().length,
+        getRowCount: () => manager.getRows().length,
         getRowData: (index) => {
-          const data = UpdateDialog.manager.getRows()[index];
+          const data = manager.getRows()[index];
           let message = getString("update-status", data.status);
           if (data.message) {
             message += ": " + data.message;
           }
           // Use Emoji for Zotero < 7.1
-          const emojiMap: Record<SimpleUpdateStatus, string> = {
-            pending: "⚪",
-            "needs-confirmation": "🟠",
-            processing: "🔵",
-            "up-to-date": "🟢",
-            updated: "🟢",
-            error: "🔴",
-          };
-          message = emojiMap[simplifyUpdateStatus(data.status)] + " " + message;
+          message = STATUS_META[data.status].emoji + " " + message;
           return { title: data.title, status: message };
         },
         onSelectionChange: (selection) => {
           const selectedRow = selection.selected.values().next().value;
           if (selectedRow === undefined) return;
-          const paperId = UpdateDialog.manager.getRows()[selectedRow].id;
+          const paperId = manager.getRows()[selectedRow].id;
           Zotero.getMainWindow()?.ZoteroPane.selectItem(paperId);
         },
         onActivate: (_, items) => {
-          const paperId = UpdateDialog.manager.getRows()[items[0]].id;
+          const paperId = manager.getRows()[items[0]].id;
           const win = Zotero.getMainWindow();
           if (win) {
             win.ZoteroPane.selectItem(paperId);
@@ -196,19 +173,11 @@ export class UpdateDialog {
     },
   ) {
     const document = UpdateDialog.window?.document;
-    if (!document) return;
-    const data = UpdateDialog.manager.getRows()[index];
+    const manager = UpdateDialog.manager;
+    if (!document || !manager) return;
+    const data = manager.getRows()[index];
 
-    const colorMap: Record<SimpleUpdateStatus, string> = {
-      pending: "#999999",
-      "needs-confirmation": "#f6c342",
-      processing: "#2ea8e5",
-      updated: "#5fb236",
-      "up-to-date": "#5fb236",
-      error: "#ff6666",
-    };
-    const status = simplifyUpdateStatus(data.status);
-    const color = colorMap[status];
+    const color = STATUS_META[data.status].color;
 
     const div = document.createElementNS(htmlNS, "div");
     div.className = `cell ${column.className}`;
@@ -224,8 +193,11 @@ export class UpdateDialog {
     div.appendChild(text);
 
     const paper = data.pendingPaper;
-    const candidate = paper?.candidate;
-    if (status === "needs-confirmation" && paper && candidate) {
+    if (
+      data.status === "needs-confirmation" &&
+      isTentativePaperIdentifier(paper)
+    ) {
+      const candidate = paper.candidate;
       // The cell is marked `.clickable` so clicks on the link do not select
       // the row (see virtualized-table's capture handler). update-dialog.css
       // restores the normal cell layout, since Zotero styles `.clickable`
@@ -238,7 +210,7 @@ export class UpdateDialog {
       link.addEventListener("click", (event: Event) => {
         event.preventDefault();
         event.stopPropagation();
-        const row = UpdateDialog.manager.getRows()[index];
+        const row = manager.getRows()[index];
         if (row?.status === "needs-confirmation") {
           void UpdateDialog.confirmCandidateWithDialog(row.id);
         }
@@ -260,14 +232,6 @@ export class UpdateDialog {
     }
   }
 
-  private static unsubscribeFromManager() {
-    const listener = UpdateDialog.tableChangeListener;
-    if (listener) {
-      UpdateDialog.manager.unsubscribe(listener);
-      UpdateDialog.tableChangeListener = undefined;
-    }
-  }
-
   // Open the per-row confirmation dialog and route the answer. The dialog is
   // non-modal like the merge-confirm dialog: the row stays pending until the
   // user confirms, skips, or closes the dialog without choosing.
@@ -275,11 +239,13 @@ export class UpdateDialog {
     // A single confirmation dialog at a time: ignore clicks while one is open
     // so double-clicks cannot stack dialogs for the same or other rows.
     if (UpdateDialog.openCandidateDialogId !== undefined) return;
-    const data = UpdateDialog.manager.getRow(id);
+    const manager = UpdateDialog.manager;
+    if (!manager) return;
+    const data = manager.getRow(id);
     if (!data || data.status !== "needs-confirmation") return;
     const paper = data.pendingPaper;
-    const candidate = paper?.candidate;
-    if (!paper || !candidate) return;
+    if (!isTentativePaperIdentifier(paper)) return;
+    const candidate = paper.candidate;
 
     UpdateDialog.openCandidateDialogId = id;
     const loadLock = Zotero.Promise.defer();
@@ -306,16 +272,16 @@ export class UpdateDialog {
 
     // The row may have been confirmed or skipped while the window was
     // loading; close the dialog without acting in that case.
-    const current = UpdateDialog.manager.getRow(id);
-    const currentCandidate = current?.pendingPaper?.candidate;
+    const current = manager.getRow(id);
     if (
       !current ||
       current.status !== "needs-confirmation" ||
-      !currentCandidate
+      !isTentativePaperIdentifier(current.pendingPaper)
     ) {
       window.close();
       return;
     }
+    const currentCandidate = current.pendingPaper.candidate;
 
     window.document.title = getString("candidate-confirm-title");
     const diff = diffWords(current.title, currentCandidate.candidateTitle, {
@@ -332,7 +298,7 @@ export class UpdateDialog {
         "removed",
       );
     } else {
-      ztoolkit.log(
+      UpdateDialog.toolkit?.log(
         "Unable to display preprint title: missing candidate-confirm element",
       );
     }
@@ -342,7 +308,7 @@ export class UpdateDialog {
     if (candidateTitle) {
       UpdateDialog.fillDiffLine(window.document, candidateTitle, diff, "added");
     } else {
-      ztoolkit.log(
+      UpdateDialog.toolkit?.log(
         "Unable to display candidate title: missing candidate-confirm element",
       );
     }
@@ -398,9 +364,9 @@ export class UpdateDialog {
     window.close();
     UpdateDialog.openCandidateDialogId = undefined;
     if (result === "confirm") {
-      await UpdateDialog.manager.confirm(id);
+      await manager.confirm(id);
     } else if (result === "skip") {
-      UpdateDialog.manager.skip(id);
+      await manager.skip(id);
     }
     // "cancel": the dialog was closed without choosing; leave the row pending.
   }
