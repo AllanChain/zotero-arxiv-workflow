@@ -1,6 +1,3 @@
-import type { VirtualizedTableHelper } from "zotero-plugin-toolkit";
-import type PQueue from "p-queue";
-
 export type UpdateStatus =
   | "pending"
   | "finding-update"
@@ -16,11 +13,4 @@ export type UpdateTableData = {
   title: string;
   status: UpdateStatus;
   message?: string;
-};
-export type UpdateWindowData = {
-  tableData: UpdateTableData[];
-  tableHelper?: VirtualizedTableHelper;
-  window?: WindowProxy;
-  unregisterObserver?: () => void;
-  queue: PQueue;
 };

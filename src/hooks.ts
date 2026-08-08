@@ -39,10 +39,10 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   if (getPref("features.updatePDF")) UpdatePDF.registerRightClickMenuItem();
   if (getPref("features.arXivUpdate")) {
     arXivUpdate.registerRightClickMenuItem();
-    addon.data.arXivUpdate.unregisterObserver = registerPrefObserver(
+    addon.data.arXivUpdate.manager.unregisterObserver = registerPrefObserver(
       "update.concurrency",
       (concurrency) => {
-        addon.data.arXivUpdate.queue.concurrency = concurrency;
+        addon.data.arXivUpdate.manager.queue.concurrency = concurrency;
       },
     );
   }
@@ -56,7 +56,7 @@ function onShutdown(): void {
   ztoolkit.unregisterAll();
   // Remove addon object
   addon.data.alive = false;
-  addon.data.arXivUpdate.unregisterObserver?.();
+  addon.data.arXivUpdate.manager.unregisterObserver?.();
   // @ts-expect-error - Plugin instance is not typed
   delete Zotero[addon.data.config.addonInstance];
 }

@@ -2,10 +2,10 @@ import { assert } from "chai";
 import {
   simplifyUpdateStatus,
   sortByStatusPriority,
-} from "../src/modules/arxiv-update";
-import type { UpdateStatus } from "../src/types";
+} from "../../src/modules/arxiv-update/status";
+import type { UpdateStatus } from "../../src/types";
 
-describe("arxiv-update helpers", function () {
+describe("status", function () {
   describe("simplifyUpdateStatus", function () {
     const cases: Array<[UpdateStatus, string]> = [
       ["pending", "pending"],

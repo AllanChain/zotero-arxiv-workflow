@@ -1,7 +1,7 @@
 import { getPref } from "../../utils/prefs";
 
 // Network seam for PaperFinder. The production implementation (see
-// arxiv-update.ts) routes through Zotero's HTTP + per-host queues; tests
+// manager.ts) routes through Zotero's HTTP + per-host queues; tests
 // inject stubs so the finder decision logic runs without real requests.
 export interface Fetcher {
   fetchText(url: string): Promise<string>;

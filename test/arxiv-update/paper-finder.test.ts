@@ -1,5 +1,5 @@
 import { assert } from "chai";
-import type { Fetcher } from "../src/modules/arxiv-update/paper-finder";
+import type { Fetcher } from "../../src/modules/arxiv-update/paper-finder";
 import {
   PaperFinder,
   extractOnlineVersion,
@@ -7,8 +7,8 @@ import {
   isKnownPreprintURL,
   localarXivVersion,
   matchTitle,
-} from "../src/modules/arxiv-update/paper-finder";
-import { clearLibrary, getPlugin, setPluginPref } from "./helpers";
+} from "../../src/modules/arxiv-update/paper-finder";
+import { clearLibrary, getPlugin, setPluginPref } from "../helpers";
 
 const UPDATE_SOURCES = ["doi", "semanticScholar", "dblp", "pubmed", "arXiv"];
 
