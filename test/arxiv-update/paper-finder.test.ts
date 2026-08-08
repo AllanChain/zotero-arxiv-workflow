@@ -1,5 +1,4 @@
 import { assert } from "chai";
-import type { Fetcher } from "../../src/modules/arxiv-update/paper-finder";
 import {
   PaperFinder,
   extractOnlineVersion,
@@ -9,8 +8,11 @@ import {
   matchTitle,
 } from "../../src/modules/arxiv-update/paper-finder";
 import { clearLibrary, getPlugin, setPluginPref } from "../helpers";
-
-const UPDATE_SOURCES = ["doi", "semanticScholar", "dblp", "pubmed", "arXiv"];
+import {
+  createFetcher,
+  createPreprintItem,
+  resetUpdateSourcePrefs,
+} from "./helpers";
 
 describe("paper-finder", function () {
   this.timeout(30000);
@@ -21,52 +23,9 @@ describe("paper-finder", function () {
   });
 
   afterEach(async function () {
-    for (const source of UPDATE_SOURCES) {
-      setPluginPref(`updateSource.${source}`, true);
-    }
+    resetUpdateSourcePrefs();
     await clearLibrary();
   });
-
-  async function createPreprintItem(
-    url: string,
-    options: { title?: string; authorLastName?: string } = {},
-  ) {
-    const item = new Zotero.Item("preprint");
-    item.setField("title", options.title ?? "Test paper title");
-    item.setField("url", url);
-    await item.saveTx();
-    if (options.authorLastName) {
-      item.setCreator(0, {
-        firstName: "Jane",
-        lastName: options.authorLastName,
-        creatorType: "author",
-      });
-      await item.saveTx();
-    }
-    return item;
-  }
-
-  // Records every request so tests can assert on which finders ran and in
-  // what order, while stubbing the response bodies.
-  function createFetcher(
-    handlers: {
-      fetchText?: (url: string) => string | Promise<string>;
-      fetchJSON?: (url: string) => unknown | Promise<unknown>;
-    } = {},
-  ) {
-    const calls: Array<{ type: "text" | "json"; url: string }> = [];
-    const fetcher: Fetcher = {
-      fetchText: async (url) => {
-        calls.push({ type: "text", url });
-        return handlers.fetchText ? handlers.fetchText(url) : "";
-      },
-      fetchJSON: async <T = any>(url: string) => {
-        calls.push({ type: "json", url });
-        return (handlers.fetchJSON ? handlers.fetchJSON(url) : {}) as T;
-      },
-    };
-    return { fetcher, calls };
-  }
 
   describe("matchTitle", function () {
     it("matches case- and whitespace-insensitively", function () {

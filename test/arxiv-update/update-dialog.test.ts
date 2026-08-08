@@ -1,5 +1,5 @@
 import { assert } from "chai";
-import type PQueue from "p-queue";
+import PQueue from "p-queue";
 import type { VirtualizedTableHelper } from "zotero-plugin-toolkit";
 import type Addon from "../../src/addon";
 import { config } from "../../package.json";
@@ -9,7 +9,15 @@ import {
 } from "../../src/modules/arxiv-update";
 import { UpdateManager } from "../../src/modules/arxiv-update/manager";
 import { UpdateDialog } from "../../src/modules/arxiv-update/update-dialog";
-import { clearLibrary, getPlugin } from "../helpers";
+import { getString } from "../../src/utils/locale";
+import { clearLibrary, getPlugin, setPluginPref } from "../helpers";
+import {
+  createFetcher,
+  createPreprintItem,
+  createUpdateManager,
+  getItem,
+  resetUpdateSourcePrefs,
+} from "./helpers";
 
 type StatusColumn = Parameters<typeof UpdateDialog.renderStatusCell>[2];
 
@@ -26,6 +34,8 @@ describe("update-dialog", function () {
   });
 
   afterEach(async function () {
+    setPluginPref("downloadJournalPDF", true);
+    resetUpdateSourcePrefs();
     // Close any dialog opened during the test and reset its statics. Fake
     // windows used to stub rendering have no `close`; guard the call.
     if (UpdateDialog.window && !UpdateDialog.window.closed) {
@@ -36,14 +46,6 @@ describe("update-dialog", function () {
     addon.data.arXivUpdate.manager = originalManager;
     await clearLibrary();
   });
-
-  async function createItem(url = "https://arxiv.org/abs/1234.5678") {
-    const item = new Zotero.Item("preprint");
-    item.setField("title", "Test paper");
-    item.setField("url", url);
-    await item.saveTx();
-    return item;
-  }
 
   // Captures enqueued tasks without executing them, so tests never touch
   // the network. The manager logs `queue.size`/`queue.pending`; both are 0
@@ -73,6 +75,37 @@ describe("update-dialog", function () {
   function useManager(manager: UpdateManager) {
     addon.data.arXivUpdate.manager = manager;
     return manager;
+  }
+
+  // Poll the real dialog until a row renders the given status message. The
+  // dialog opens asynchronously and the task runs in the background, so the
+  // status text (locale-independent via getString) is the sync point.
+  function waitForStatusMessage(
+    text: string,
+    timeout = 15000,
+  ): Promise<WindowProxy> {
+    return new Promise((resolve, reject) => {
+      const deadline = Date.now() + timeout;
+      const timer = setInterval(() => {
+        const w = UpdateDialog.window;
+        if (w && !w.closed) {
+          const messages = w.document.querySelectorAll(
+            `#${config.addonRef}-status-table .status-message`,
+          );
+          for (const el of messages) {
+            if ((el as HTMLElement).innerText.includes(text)) {
+              clearInterval(timer);
+              resolve(w);
+              return;
+            }
+          }
+        }
+        if (Date.now() > deadline) {
+          clearInterval(timer);
+          reject(new Error(`update dialog never showed status "${text}"`));
+        }
+      }, 100);
+    });
   }
 
   function waitForDialogRows(
@@ -119,7 +152,7 @@ describe("update-dialog", function () {
   describe("UpdateManager.createUpdateTasks", function () {
     it("adds a pending row per new item and dedupes", async function () {
       const { manager, tasks } = testManager();
-      const item = await createItem();
+      const item = await createPreprintItem();
       manager.createUpdateTasks([item, item]);
       assert.lengthOf(manager.getRows(), 1);
       assert.deepEqual(manager.getRows()[0], {
@@ -133,7 +166,7 @@ describe("update-dialog", function () {
 
     it("keeps rows sorted by status priority after updates", async function () {
       const { manager } = testManager();
-      const [a, b] = [await createItem(), await createItem()];
+      const [a, b] = [await createPreprintItem(), await createPreprintItem()];
       manager.createUpdateTasks([a, b]);
       manager.updateRow(b.id, { status: "updated" });
       assert.deepEqual(
@@ -149,7 +182,7 @@ describe("update-dialog", function () {
 
     it("drops finished rows when filtered", async function () {
       const { manager } = testManager();
-      const [a, b] = [await createItem(), await createItem()];
+      const [a, b] = [await createPreprintItem(), await createPreprintItem()];
       manager.createUpdateTasks([a, b]);
       manager.updateRow(a.id, { status: "updated" });
       manager.filterInactive();
@@ -161,7 +194,7 @@ describe("update-dialog", function () {
 
     it("notifies onChange after mutations", async function () {
       const { manager } = testManager();
-      const item = await createItem();
+      const item = await createPreprintItem();
       let notified = 0;
       manager.onChange = () => notified++;
       manager.createUpdateTasks([item]);
@@ -174,7 +207,7 @@ describe("update-dialog", function () {
     it("composes an emoji status with the message", async function () {
       const { manager } = testManager();
       useManager(manager);
-      const item = await createItem();
+      const item = await createPreprintItem();
       manager.createUpdateTasks([item]);
       manager.updateRow(item.id, {
         status: "updated",
@@ -192,7 +225,7 @@ describe("update-dialog", function () {
     it("returns undefined when no dialog document exists", async function () {
       const { manager } = testManager();
       useManager(manager);
-      const item = await createItem();
+      const item = await createPreprintItem();
       manager.createUpdateTasks([item]);
       UpdateDialog.window = undefined;
       assert.isUndefined(
@@ -205,7 +238,7 @@ describe("update-dialog", function () {
     it("renders a colored swatch and the message without the emoji", async function () {
       const { manager } = testManager();
       useManager(manager);
-      const item = await createItem();
+      const item = await createPreprintItem();
       manager.createUpdateTasks([item]);
       manager.updateRow(item.id, { status: "updated", message: "done" });
       UpdateDialog.window = {
@@ -229,7 +262,7 @@ describe("update-dialog", function () {
     it("invalidates the open table without reopening", async function () {
       const { manager } = testManager();
       useManager(manager);
-      const item = await createItem();
+      const item = await createPreprintItem();
       manager.createUpdateTasks([item]);
       let invalidated = 0;
       UpdateDialog.window = {
@@ -246,7 +279,7 @@ describe("update-dialog", function () {
     it("filters stale rows and opens when the window is closed", async function () {
       const { manager } = testManager();
       useManager(manager);
-      const [a, b] = [await createItem(), await createItem()];
+      const [a, b] = [await createPreprintItem(), await createPreprintItem()];
       manager.createUpdateTasks([a, b]);
       manager.updateRow(a.id, { status: "updated" });
       UpdateDialog.window = { closed: true } as unknown as WindowProxy;
@@ -293,7 +326,7 @@ describe("update-dialog", function () {
     it("opens the real dialog with a pending row, offline", async function () {
       const { manager, tasks } = testManager();
       useManager(manager);
-      const item = await createItem();
+      const item = await createPreprintItem();
       arXivUpdate.update([item]);
       const win = await waitForDialogRows(1);
       assert.isDefined(win);
@@ -304,6 +337,46 @@ describe("update-dialog", function () {
       // The task was enqueued but never executed (capturing queue), so the
       // dialog rendered without any network activity.
       assert.lengthOf(tasks, 1);
+      win.close();
+    });
+
+    it("runs the real update task behind the dialog and renders the final status", async function () {
+      setPluginPref("downloadJournalPDF", false);
+      const item = await createPreprintItem();
+      const { fetcher, calls } = createFetcher({
+        fetchText: async () => '<html data-doi="10.1000/published"></html>',
+      });
+      const { manager } = createUpdateManager({ fetcher });
+      useManager(manager);
+
+      arXivUpdate.update([item]);
+      const win = await waitForStatusMessage(
+        getString("update-status", "updated"),
+      );
+
+      assert.lengthOf(calls, 1, "only the arXiv abstract page is fetched");
+      assert.equal(manager.getRows()[0].status, "updated");
+      const merged = await getItem(item.id);
+      assert.equal(merged.itemType, "journalArticle");
+      assert.equal(merged.getField("DOI"), "10.1000/published");
+      win.close();
+    });
+
+    it("shows the no-update status in the dialog when no source matches", async function () {
+      setPluginPref("downloadJournalPDF", false);
+      const item = await createPreprintItem();
+      const { fetcher } = createFetcher(); // every source misses
+      const { manager } = createUpdateManager({ fetcher });
+      useManager(manager);
+
+      arXivUpdate.update([item]);
+      const win = await waitForStatusMessage(
+        getString("update-status", "up-to-date"),
+      );
+
+      assert.equal(manager.getRows()[0].status, "up-to-date");
+      const after = await getItem(item.id);
+      assert.equal(after.itemType, "preprint", "item should be left untouched");
       win.close();
     });
   });

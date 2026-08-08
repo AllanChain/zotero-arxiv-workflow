@@ -54,9 +54,9 @@ async function fetchJSONBounded<T = any>(url: string): Promise<T> {
   return JSON.parse((await requestBounded(url)).responseText!) as T;
 }
 
-// Fetcher implementation used by PaperFinder; routes through the per-host
-// bounded queue above.
-const fetcher: Fetcher = {
+// Default Fetcher implementation used by PaperFinder; routes through the
+// per-host bounded queue above. Tests inject their own via UpdateManagerOptions.
+const defaultFetcher: Fetcher = {
   fetchText: fetchTextBounded,
   fetchJSON: fetchJSONBounded,
 };
@@ -101,6 +101,24 @@ async function createItemByZotero(
 }
 
 /**
+ * Injectable seams for UpdateManager. Production uses the defaults (the
+ * bounded production fetcher and the translator-based import); tests pass
+ * stubs so the whole update pipeline runs without the network.
+ */
+export interface UpdateManagerOptions {
+  /** Network seam for the finder. Defaults to `defaultFetcher`. */
+  fetcher?: Fetcher;
+  /**
+   * Creates the journal item from a found identifier. Defaults to
+   * `createItemByZotero` (translator-based DOI/URL import).
+   */
+  createItem?: (
+    paper: PaperIdentifier,
+    collections: number[],
+  ) => Promise<Zotero.Item | false>;
+}
+
+/**
  * Owns the update task queue and the row list backing the update dialog.
  * Rows are kept in display order; every mutation goes through the methods
  * here, which re-sort and notify `onChange` so the dialog can refresh.
@@ -110,8 +128,16 @@ export class UpdateManager {
   /** Set by the update dialog to refresh the open table on row changes. */
   onChange?: () => void;
   private tableData: UpdateTableData[] = [];
+  private readonly fetcher: Fetcher;
+  private readonly createItem: NonNullable<UpdateManagerOptions["createItem"]>;
 
-  constructor(public queue: PQueue) {}
+  constructor(
+    public queue: PQueue,
+    options: UpdateManagerOptions = {},
+  ) {
+    this.fetcher = options.fetcher ?? defaultFetcher;
+    this.createItem = options.createItem ?? createItemByZotero;
+  }
 
   /** The canonical row list. Read-only by convention; mutate through the methods here. */
   getRows(): UpdateTableData[] {
@@ -182,7 +208,7 @@ export class UpdateManager {
     ztoolkit.log(`Update task started for "${preprintItem.getDisplayTitle()}"`);
     reportProgress("finding-update");
     try {
-      const paper = await new PaperFinder(preprintItem, fetcher).find();
+      const paper = await new PaperFinder(preprintItem, this.fetcher).find();
       if (paper === undefined) return reportProgress("up-to-date");
       // Download published version
       reportProgress("downloading-metadata");
@@ -192,7 +218,7 @@ export class UpdateManager {
         : pane?.getSelectedCollection
           ? [pane.getSelectedCollection(true)]
           : [];
-      const journalItem = await createItemByZotero(paper, collections);
+      const journalItem = await this.createItem(paper, collections);
       if (!journalItem) return reportProgress("download-error");
       journalItem.saveTx();
 
