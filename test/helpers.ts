@@ -3,7 +3,22 @@ import { config } from "../package.json";
 
 export function getPlugin(): Addon {
   // @ts-expect-error string access not typed
-  return Zotero[config.addonInstance];
+  const plugin = Zotero[config.addonInstance];
+  registerPluginGlobals(plugin);
+  return plugin;
+}
+
+// Production registers `ztoolkit`/`addon` only on the plugin sandbox's
+// global (`defineGlobal` in src/index.ts). Test bundles run as scripts in
+// the Zotero window, where those identifiers are otherwise undefined, so
+// mirror the registration on the window global. This lets tests import src
+// modules directly and have them resolve the same globals as in production.
+function registerPluginGlobals(plugin: Addon) {
+  Object.defineProperty(globalThis, "ztoolkit", {
+    get: () => plugin.data.ztoolkit,
+    configurable: true,
+  });
+  (globalThis as any).addon = plugin;
 }
 
 export async function getAllItems() {

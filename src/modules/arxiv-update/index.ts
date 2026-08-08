@@ -1,30 +1,22 @@
-import { config } from "../../package.json";
+import { config } from "../../../package.json";
 import PQueue from "p-queue";
-import { getString } from "../utils/locale";
-import { getPref } from "../utils/prefs";
-import { arXivMerge } from "./arxiv-merge";
-import { catchError } from "./error";
-import { UpdateStatus, UpdateTableData } from "../types";
-
-const KNOWN_PREPRINT_SERVERS = {
-  arxiv: "arxiv.org",
-  biorxiv: "www.biorxiv.org",
-  medrxiv: "www.medrxiv.org",
-  chemrxiv: "chemrxiv.org",
-  psyarxiv: "osf.io",
-};
-
-interface PaperIdentifier {
-  doi?: string;
-  url?: string;
-  title: string;
-}
+import { getString } from "../../utils/locale";
+import { getPref } from "../../utils/prefs";
+import { arXivMerge } from "../arxiv-merge";
+import { catchError } from "../error";
+import {
+  Fetcher,
+  isKnownPreprintURL,
+  PaperFinder,
+  PaperIdentifier,
+} from "./paper-finder";
+import { UpdateStatus, UpdateTableData } from "../../types";
 
 type SimpleUpdateStatus =
   "pending" | "processing" | "up-to-date" | "updated" | "error";
 type ReportProgress = (status: UpdateStatus, msg?: string) => void;
 
-function simplifyUpdateStatus(status: UpdateStatus): SimpleUpdateStatus {
+export function simplifyUpdateStatus(status: UpdateStatus): SimpleUpdateStatus {
   switch (status) {
     case "pending":
       return "pending";
@@ -42,9 +34,24 @@ function simplifyUpdateStatus(status: UpdateStatus): SimpleUpdateStatus {
   }
 }
 
-function matchTitle(base: string, target: any): boolean {
-  if (typeof target !== "string") return false;
-  return base.toLowerCase().trim() === target.toLowerCase().trim();
+export function sortByStatusPriority(
+  tableData: UpdateTableData[],
+): UpdateTableData[] {
+  const newTableData: UpdateTableData[] = [];
+  for (const status of [
+    "error",
+    "processing",
+    "pending",
+    "updated",
+    "up-to-date",
+  ]) {
+    for (const tableDatum of tableData) {
+      if (simplifyUpdateStatus(tableDatum.status) === status) {
+        newTableData.push(tableDatum);
+      }
+    }
+  }
+  return newTableData;
 }
 
 // Limit concurrent requests per host to avoid being rate-limited.
@@ -92,6 +99,13 @@ async function fetchTextBounded(url: string): Promise<string> {
 async function fetchJSONBounded<T = any>(url: string): Promise<T> {
   return JSON.parse((await requestBounded(url)).responseText!) as T;
 }
+
+// Fetcher implementation used by PaperFinder; routes through the per-host
+// bounded queue above.
+const fetcher: Fetcher = {
+  fetchText: fetchTextBounded,
+  fetchJSON: fetchJSONBounded,
+};
 
 async function createItemByZotero(
   paper: PaperIdentifier,
@@ -160,9 +174,7 @@ export class arXivUpdate {
               Zotero.getActiveZoteroPane()?.getSelectedItems() ?? []
             ).map((item) => {
               if (item.itemType !== "preprint") return false;
-              const arXivURL = item.getField("url");
-              const urlHost = new URL(arXivURL).hostname;
-              return Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost);
+              return isKnownPreprintURL(item.getField("url"));
             });
             if (getPref("update.alwaysShowButton"))
               setVisible(isKnownPreprintItem.some(Boolean));
@@ -212,7 +224,7 @@ export class arXivUpdate {
     ztoolkit.log(`Update task started for "${preprintItem.getDisplayTitle()}"`);
     reportProgress("finding-update");
     try {
-      const paper = await new PaperFinder(preprintItem).find();
+      const paper = await new PaperFinder(preprintItem, fetcher).find();
       if (paper === undefined) return reportProgress("up-to-date");
       // Download published version
       reportProgress("downloading-metadata");
@@ -414,231 +426,12 @@ export class arXivUpdate {
   }
 
   static sortTableData() {
-    const newTableData: UpdateTableData[] = [];
-    for (const status of [
-      "error",
-      "processing",
-      "pending",
-      "updated",
-      "up-to-date",
-    ]) {
-      for (const tableDatum of addon.data.arXivUpdate.tableData) {
-        if (simplifyUpdateStatus(tableDatum.status) === status) {
-          newTableData.push(tableDatum);
-        }
-      }
-    }
+    const newTableData = sortByStatusPriority(addon.data.arXivUpdate.tableData);
     addon.data.arXivUpdate.tableData.splice(
       0,
       addon.data.arXivUpdate.tableData.length,
       ...newTableData,
     );
     addon.data.arXivUpdate.tableHelper?.treeInstance.invalidate();
-  }
-}
-
-class PaperFinder {
-  preprintURL: string;
-  title: string;
-  item: Zotero.Item;
-
-  constructor(preprintItem: Zotero.Item) {
-    this.item = preprintItem;
-    this.preprintURL = preprintItem.getField("url");
-    this.title = preprintItem.getDisplayTitle();
-    const urlHost = new URL(this.preprintURL).hostname;
-    if (!Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost)) {
-      throw `${this.preprintURL} is not a valid preprint server URL`;
-    }
-  }
-
-  async find(): Promise<PaperIdentifier | undefined> {
-    const finders = [
-      getPref("updateSource.doi") && this.relatedDOI.bind(this),
-      getPref("updateSource.semanticScholar") &&
-        this.semanticScholar.bind(this),
-      getPref("updateSource.dblp") && this.dblp.bind(this),
-      getPref("updateSource.pubmed") && this.pubMed.bind(this),
-      getPref("updateSource.arXiv") && this.arXivPDF.bind(this),
-    ];
-    for (const finder of finders) {
-      if (!finder) continue;
-      const result = await finder().catch((e) =>
-        ztoolkit.log(finder.name, "failed:", String(e)),
-      );
-      if (result) return result;
-    }
-  }
-
-  async relatedDOI(): Promise<PaperIdentifier | undefined> {
-    const urlHost = new URL(this.preprintURL).hostname;
-    if (urlHost === KNOWN_PREPRINT_SERVERS.arxiv) {
-      const htmlContent = await fetchTextBounded(this.preprintURL);
-      const doiMatch = htmlContent.match(/data-doi="(?<doi>.*?)"/);
-      const doi = doiMatch?.groups?.doi;
-      return doi ? { doi, title: "Published PDF" } : undefined;
-    } else if (
-      urlHost === KNOWN_PREPRINT_SERVERS.biorxiv ||
-      urlHost === KNOWN_PREPRINT_SERVERS.medrxiv
-    ) {
-      const arxivID = this.preprintURL.match(/\/(?<arxivID>[\d./]+)v\d+$/)
-        ?.groups?.arxivID;
-      if (!arxivID) return undefined;
-      const apiURL =
-        urlHost === KNOWN_PREPRINT_SERVERS.biorxiv
-          ? `https://api.biorxiv.org/details/biorxiv/${arxivID}`
-          : `https://api.medrxiv.org/details/medrxiv/${arxivID}`;
-      const json = await fetchJSONBounded(apiURL);
-      const doi = json.collection?.[0]?.published as string | undefined;
-      return doi ? { doi, title: "Published PDF" } : undefined;
-    } else if (urlHost == KNOWN_PREPRINT_SERVERS.chemrxiv) {
-      const arxivID = this.preprintURL.match(/\/(?<arxivID>[\da-f]+)$/)?.groups
-        ?.arxivID;
-      if (!arxivID) return undefined;
-      const apiURL = `https://chemrxiv.org/engage/chemrxiv/public-api/v1/items/${arxivID}`;
-      const json = await fetchJSONBounded(apiURL);
-      const doi = json.vor?.vorDoi as string | undefined;
-      return doi ? { doi, title: "Published PDF" } : undefined;
-    } else {
-      return undefined;
-    }
-  }
-
-  async semanticScholar(): Promise<PaperIdentifier | undefined> {
-    // Currently, only searching arXiv paper on semanticScholar is supported
-    const urlHost = new URL(this.preprintURL).hostname;
-    if (urlHost !== KNOWN_PREPRINT_SERVERS.arxiv) return undefined;
-    const idMatch = this.preprintURL.match(/\/(?<arxiv>[^/]+)$/);
-    if (idMatch?.groups?.arxiv === undefined) {
-      return undefined;
-    }
-    const arXivID = idMatch.groups.arxiv;
-    const semanticAPI = "https://api.semanticscholar.org/graph/v1/paper";
-    const semanticURL = `${semanticAPI}/ARXIV:${arXivID}?fields=externalIds`;
-    const semanticJSON = await fetchJSONBounded(semanticURL);
-    const doi = semanticJSON.externalIds?.DOI as string | undefined;
-    // Retrun undefined if the DOI is an arXiv DOI
-    return !doi || doi.toLowerCase()?.includes("arxiv")
-      ? undefined
-      : { doi, title: "Published PDF" };
-  }
-
-  async dblp(): Promise<PaperIdentifier | undefined> {
-    // Well, CS guys won't use preprint servers other than arXiv
-    const urlHost = new URL(this.preprintURL).hostname;
-    if (urlHost !== KNOWN_PREPRINT_SERVERS.arxiv) return undefined;
-    const dblpAPI = "https://dblp.org/search/publ/api";
-    // DBLP sends at most 100 hits per query, ordered by year descending.
-    // A title-only query for a popular paper can match hundreds of records
-    // and even homonymous titles by other authors, so narrow the search with
-    // the first author whenever the item has one.
-    const firstAuthor = this.item.getCreators()[0]?.lastName;
-    const query = firstAuthor ? `${this.title} ${firstAuthor}` : this.title;
-    ztoolkit.log(`DBLP query: ${query}`);
-    const dblpURL = `${dblpAPI}?q=${encodeURIComponent(query)}&format=json&h=100`;
-    const json = await fetchJSONBounded(dblpURL);
-    const hits = json?.result?.hits?.hit ?? [];
-    ztoolkit.log(`DBLP returned ${hits.length} hits`);
-    for (const hit of hits) {
-      const info = hit?.info;
-      // Remove final `.` in title (idk why dblp has this)
-      const title = info?.title?.replace(/\.$/, "");
-      if (!matchTitle(this.title, title)) continue;
-      // Ignore this DBLP entry if it belongs to CoRR. See also #14
-      if (info.venue === "CoRR") {
-        ztoolkit.log(`DBLP: skipping CoRR record ${info.key}`);
-        continue;
-      }
-      // Prefer the DOI when DBLP has one: importing by identifier is more
-      // robust than scraping an arbitrary publisher page.
-      if (info.doi && !String(info.doi).toLowerCase().includes("arxiv")) {
-        ztoolkit.log(`DBLP matched ${info.key} via DOI ${info.doi}`);
-        return { doi: info.doi, title: "Published PDF" };
-      }
-      // Prefer electron edition (ee) which points to the official website instead of DBLP
-      let url = info.ee || info.url;
-      if (!url) continue;
-      // Records without a real venue page (e.g. early ICLR) point back to
-      // arXiv itself; updating from them would re-import the preprint.
-      const host = new URL(url).hostname;
-      if (host === "arxiv.org" || host.endsWith(".arxiv.org")) {
-        ztoolkit.log(`DBLP: skipping arXiv-hosted record ${info.key}`);
-        continue;
-      }
-      // openreview.net serves a script-only page behind an anti-bot
-      // challenge, impossible to import headlessly; import from the BibTeX
-      // view of the DBLP record itself instead.
-      if (host === "openreview.net" || host.endsWith(".openreview.net")) {
-        url = `https://dblp.org/rec/${info.key}.html?view=bibtex`;
-      }
-      ztoolkit.log(
-        `DBLP matched ${info.key} (${info.venue} ${info.year}): ${url}`,
-      );
-      return { url, title: "Published PDF" };
-    }
-    ztoolkit.log(`No published version found on DBLP for "${this.title}"`);
-    return undefined;
-  }
-
-  async pubMed(): Promise<PaperIdentifier | undefined> {
-    const pubMedSearchAPI =
-      "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed";
-    const pubMedSearchURL = `${pubMedSearchAPI}&term=${encodeURIComponent(this.title)}&retmode=json`;
-    const searchJson = await fetchJSONBounded(pubMedSearchURL);
-    const paperId = searchJson?.esearchresult?.idlist?.[0];
-    if (!paperId) return undefined;
-    const pubMedPaperAPI =
-      "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed";
-    const pubMedPaperURL = `${pubMedPaperAPI}&id=${paperId}&retmode=json`;
-    const paperJson = await fetchJSONBounded(pubMedPaperURL);
-    // Remove final `.` in title (idk why PubMed has this)
-    const info = paperJson?.result?.[paperId];
-    const title = info?.title?.replace(/\.$/, "");
-    if (!matchTitle(this.title, title)) {
-      ztoolkit.log(
-        title
-          ? `PubMed title mismatch: expected "${this.title}", got "${title}"`
-          : "Paper not found on PubMed",
-      );
-      return;
-    }
-    const idInfos = info?.articleids;
-    if (!idInfos) return undefined;
-    for (const idInfo of idInfos) {
-      if (idInfo.idtype === "doi") {
-        return { doi: idInfo.value, title: "Published PDF" };
-      }
-    }
-    return undefined;
-  }
-
-  async arXivPDF(): Promise<PaperIdentifier | undefined> {
-    const urlHost = new URL(this.preprintURL).hostname;
-    if (urlHost !== KNOWN_PREPRINT_SERVERS.arxiv) return undefined;
-    // Having a local PDF does not mean we can extract version from it.
-    // We skip updating if we fail to extract version, but we will try to
-    // download a version if there is no local PDF.
-    let hasPDF = false;
-    let localVersion = 0;
-    for (const attachmentID of this.item.getAttachments()) {
-      const attachment = await Zotero.Items.getAsync(attachmentID);
-      if (!attachment || !attachment.isPDFAttachment()) continue;
-      hasPDF = true;
-      const fullText = await Zotero.PDFWorker.getFullText(attachmentID, 1);
-      const match = fullText.text.match(/arXiv:[\d.]+v(\d+)/);
-      if (!match) continue;
-      const currentPDFVersion = parseInt(match[1], 10);
-      if (currentPDFVersion > localVersion) {
-        localVersion = currentPDFVersion;
-      }
-    }
-    ztoolkit.log(`Current arXiv version: ${localVersion}`);
-    if (hasPDF && localVersion === 0) return undefined;
-    const htmlContent = await fetchTextBounded(this.item.getField("url"));
-    const match = htmlContent.match(/<strong>\[v(\d+)\]<\/strong>/);
-    if (!match) return undefined;
-    const onlineVersion = parseInt(match[1], 10);
-    if (hasPDF && onlineVersion <= localVersion) return undefined;
-    return { url: this.preprintURL, title: `v${onlineVersion} PDF` };
   }
 }
