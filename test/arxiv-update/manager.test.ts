@@ -1,13 +1,16 @@
 import { assert } from "chai";
 import type Addon from "@/addon";
-import type { PaperIdentifier } from "@/modules/arxiv-update/paper-finder";
 import type { UpdateManager } from "@/modules/arxiv-update/manager";
 import { UpdateDialog } from "@/modules/arxiv-update/update-dialog";
+import type { PaperIdentifier } from "@/types";
+import { getString } from "@/utils/locale";
 import { clearLibrary, getPlugin, setPluginPref } from "@test/helpers";
 import {
+  createDBLPFuzzyHit,
   createFetcher,
   createJournalItem,
   createPreprintItem,
+  createSOAPPreprint,
   createUpdateManager,
   getItem,
   resetUpdateSourcePrefs,
@@ -173,5 +176,263 @@ describe("update-manager", function () {
     assert.equal(manager.getRows()[0].status, "updated");
     const merged = await getItem(item.id);
     assert.equal(merged.itemType, "journalArticle");
+  });
+
+  describe("review flow", function () {
+    // A fetcher whose only result is the SOAP DBLP fuzzy candidate, so every
+    // update task ends in `needs-confirmation`.
+    function fuzzyFetcher() {
+      return createFetcher({
+        fetchText: async () => "<html></html>",
+        fetchJSON: async (url) => {
+          if (url.includes("semanticscholar")) return {};
+          if (url.includes("dblp")) {
+            return { result: { hits: { hit: [createDBLPFuzzyHit()] } } };
+          }
+          return {};
+        },
+      });
+    }
+
+    it("holds a fuzzy match for confirmation without importing it", async function () {
+      setPluginPref("downloadJournalPDF", false);
+      const item = await createSOAPPreprint(undefined, { date: "2024-09-17" });
+      let importCalls = 0;
+      const { queue, manager } = createUpdateManager({
+        fetcher: fuzzyFetcher().fetcher,
+        createItem: async (paper) => {
+          importCalls++;
+          return createJournalItem(paper);
+        },
+      });
+
+      manager.createUpdateTasks([item]);
+      await queue.onIdle();
+
+      const row = manager.getRow(item.id);
+      assert.equal(row?.status, "needs-confirmation");
+      assert.ok(
+        manager.getPendingPaper(item.id),
+        "the candidate should be held for review",
+      );
+      assert.equal(importCalls, 0, "tentative matches must not be imported");
+      const after = await getItem(item.id);
+      assert.equal(after.itemType, "preprint", "item should be left untouched");
+    });
+
+    it("confirm imports and merges the confirmed candidate", async function () {
+      setPluginPref("downloadJournalPDF", false);
+      const item = await createSOAPPreprint(undefined, { date: "2024-09-17" });
+      const { fetcher } = fuzzyFetcher();
+      const { queue, manager } = createUpdateManager({ fetcher });
+
+      manager.createUpdateTasks([item]);
+      await queue.onIdle();
+      assert.equal(manager.getRow(item.id)?.status, "needs-confirmation");
+
+      await manager.confirm(item.id);
+      await queue.onIdle();
+
+      const row = manager.getRow(item.id);
+      assert.equal(row?.status, "updated");
+      assert.isUndefined(
+        manager.getPendingPaper(item.id),
+        "pending paper should be cleared",
+      );
+      const merged = await getItem(item.id);
+      assert.equal(merged.itemType, "journalArticle");
+      assert.equal(merged.getField("DOI"), "10.5555/soap-example");
+    });
+
+    it("skip marks the row up-to-date when the arXiv source is disabled", async function () {
+      setPluginPref("downloadJournalPDF", false);
+      setPluginPref("updateSource.arXiv", false);
+      const item = await createSOAPPreprint(undefined, { date: "2024-09-17" });
+      const { fetcher } = fuzzyFetcher();
+      const { queue, manager } = createUpdateManager({ fetcher });
+
+      manager.createUpdateTasks([item]);
+      await queue.onIdle();
+      assert.equal(manager.getRow(item.id)?.status, "needs-confirmation");
+
+      await manager.skip(item.id);
+      await queue.onIdle();
+
+      const row = manager.getRow(item.id);
+      assert.equal(row?.status, "up-to-date");
+      assert.equal(row?.message, getString("review-message", "skipped"));
+    });
+
+    it("skip falls back to the arXiv self-update when enabled", async function () {
+      setPluginPref("downloadJournalPDF", false);
+      setPluginPref("updateSource.arXiv", true);
+      const item = await createSOAPPreprint(undefined, { date: "2024-09-17" });
+      const { fetcher } = createFetcher({
+        fetchText: async () => "<html><strong>[v2]</strong></html>",
+        fetchJSON: async (url) => {
+          if (url.includes("semanticscholar")) return {};
+          if (url.includes("dblp")) {
+            return { result: { hits: { hit: [createDBLPFuzzyHit()] } } };
+          }
+          return {};
+        },
+      });
+      let located: PaperIdentifier | undefined;
+      const { queue, manager } = createUpdateManager({
+        fetcher,
+        createItem: async (paper) => {
+          located = paper;
+          return createJournalItem(paper);
+        },
+      });
+
+      manager.createUpdateTasks([item]);
+      await queue.onIdle();
+      assert.equal(manager.getRow(item.id)?.status, "needs-confirmation");
+
+      await manager.skip(item.id);
+      await queue.onIdle();
+
+      const row = manager.getRow(item.id);
+      assert.equal(row?.status, "updated");
+      assert.deepEqual(located, {
+        url: "https://arxiv.org/abs/2409.11321",
+        title: "v2 PDF",
+      });
+    });
+
+    it("a waiting confirmation does not block other items", async function () {
+      setPluginPref("downloadJournalPDF", false);
+      const a = await createSOAPPreprint("https://arxiv.org/abs/1111.1111", {
+        date: "2024-09-17",
+      });
+      const b = await createPreprintItem("https://arxiv.org/abs/2222.2222", {
+        title: "Paper B",
+      });
+      const c = await createPreprintItem("https://arxiv.org/abs/3333.3333", {
+        title: "Paper C",
+      });
+      const { fetcher } = createFetcher({
+        fetchText: async (url) => {
+          if (url.includes("2222")) return '<html data-doi="10.5555/b"></html>';
+          if (url.includes("3333")) return '<html data-doi="10.5555/c"></html>';
+          return "<html></html>"; // item A: no related DOI
+        },
+        fetchJSON: async (url) => {
+          if (url.includes("semanticscholar")) return {};
+          if (url.includes("dblp")) {
+            return { result: { hits: { hit: [createDBLPFuzzyHit()] } } };
+          }
+          return {};
+        },
+      });
+      const { queue, manager } = createUpdateManager({ fetcher });
+
+      manager.createUpdateTasks([a, b, c]);
+      await queue.onIdle();
+
+      assert.equal(
+        manager.getRow(a.id)?.status,
+        "needs-confirmation",
+        "item A should be waiting on the user",
+      );
+      assert.equal(
+        manager.getRow(b.id)?.status,
+        "updated",
+        "waiting item A must not block item B",
+      );
+      assert.equal(
+        manager.getRow(c.id)?.status,
+        "updated",
+        "waiting item A must not block item C",
+      );
+      assert.ok(manager.getPendingPaper(a.id));
+    });
+
+    it("confirmations are throttled through the queue, not run inline", async function () {
+      setPluginPref("downloadJournalPDF", false);
+      const a = await createSOAPPreprint("https://arxiv.org/abs/1111.1111", {
+        date: "2024-09-17",
+      });
+      const b = await createSOAPPreprint("https://arxiv.org/abs/2222.2222", {
+        date: "2024-09-17",
+      });
+      const { fetcher } = createFetcher({
+        fetchText: async () => "<html></html>",
+        fetchJSON: async (url) => {
+          if (url.includes("semanticscholar")) return {};
+          if (url.includes("dblp")) {
+            return { result: { hits: { hit: [createDBLPFuzzyHit()] } } };
+          }
+          return {};
+        },
+      });
+      let concurrent = 0;
+      let maxConcurrent = 0;
+      const { queue, manager } = createUpdateManager({
+        fetcher,
+        createItem: async (paper) => {
+          concurrent++;
+          maxConcurrent = Math.max(maxConcurrent, concurrent);
+          await Zotero.Promise.delay(30);
+          concurrent--;
+          return createJournalItem(paper);
+        },
+      });
+
+      manager.createUpdateTasks([a, b]);
+      await queue.onIdle();
+      assert.equal(manager.getRow(a.id)?.status, "needs-confirmation");
+      assert.equal(manager.getRow(b.id)?.status, "needs-confirmation");
+
+      await manager.confirm(a.id);
+      await manager.confirm(b.id);
+      await queue.onIdle();
+
+      assert.equal(manager.getRow(a.id)?.status, "updated");
+      assert.equal(manager.getRow(b.id)?.status, "updated");
+      assert.equal(maxConcurrent, 1, "imports must run one at a time");
+    });
+
+    it("re-running update while a row awaits confirmation does not re-find", async function () {
+      setPluginPref("downloadJournalPDF", false);
+      const item = await createSOAPPreprint(undefined, { date: "2024-09-17" });
+      const { fetcher, calls } = fuzzyFetcher();
+      const { queue, manager } = createUpdateManager({ fetcher });
+
+      manager.createUpdateTasks([item]);
+      await queue.onIdle();
+      const pending = manager.getPendingPaper(item.id);
+      const callCount = calls.length;
+
+      manager.createUpdateTasks([item]);
+      await queue.onIdle();
+
+      assert.lengthOf(manager.getRows(), 1);
+      assert.equal(calls.length, callCount, "no new finder requests");
+      assert.equal(manager.getRow(item.id)?.status, "needs-confirmation");
+      assert.equal(manager.getPendingPaper(item.id), pending);
+    });
+
+    it("confirm or skip without a paused review is a no-op", async function () {
+      setPluginPref("downloadJournalPDF", false);
+      const item = await createSOAPPreprint(undefined, { date: "2024-09-17" });
+      const { fetcher } = fuzzyFetcher();
+      const { queue, manager } = createUpdateManager({ fetcher });
+
+      manager.createUpdateTasks([item]);
+      await queue.onIdle();
+      assert.equal(manager.getRow(item.id)?.status, "needs-confirmation");
+
+      // The review is already consumed (e.g. a duplicate click): confirm and
+      // skip must no-op rather than re-run the task.
+      manager.reviews.delete(item.id);
+      const before = manager.getRow(item.id)?.status;
+      await manager.confirm(item.id);
+      await manager.skip(item.id);
+      await queue.onIdle();
+
+      assert.equal(manager.getRow(item.id)?.status, before);
+    });
   });
 });

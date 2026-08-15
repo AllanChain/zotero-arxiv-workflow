@@ -19,3 +19,17 @@ vbox {
 .status-message {
   margin-left: 4px;
 }
+
+.candidate-link {
+  color: var(--accent-blue, #4d8fe6);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Zotero styles `.cell.clickable` as a centered button cell; the status
+   cell is a regular status row with an inline link, so keep the standard
+   cell layout. */
+.virtualized-table .cell.clickable.status-cell {
+  display: block;
+  padding: 0 8px;
+}
