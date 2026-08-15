@@ -12,6 +12,7 @@ describe("status", function () {
       ["finding-update", "processing"],
       ["downloading-metadata", "processing"],
       ["downloading-pdf", "processing"],
+      ["needs-confirmation", "needs-confirmation"],
       ["up-to-date", "up-to-date"],
       ["updated", "updated"],
       ["download-error", "error"],
@@ -29,17 +30,18 @@ describe("status", function () {
       return { id: 0, title, status };
     }
 
-    it("orders error, processing, pending, updated, up-to-date", function () {
+    it("orders error, needs-confirmation, processing, pending, updated, up-to-date", function () {
       const sorted = sortByStatusPriority([
         data("pending", "a"),
         data("updated", "b"),
         data("download-error", "c"),
+        data("needs-confirmation", "c2"),
         data("finding-update", "d"),
         data("up-to-date", "e"),
       ]);
       assert.deepEqual(
         sorted.map((d) => d.title),
-        ["c", "d", "a", "b", "e"],
+        ["c", "c2", "d", "a", "b", "e"],
       );
     });
 

@@ -1,7 +1,12 @@
 import type { UpdateStatus, UpdateTableData } from "../../types";
 
 export type SimpleUpdateStatus =
-  "pending" | "processing" | "up-to-date" | "updated" | "error";
+  | "pending"
+  | "processing"
+  | "needs-confirmation"
+  | "up-to-date"
+  | "updated"
+  | "error";
 
 // Group the granular task statuses into the display categories used for
 // sorting, emoji, and cell colors.
@@ -13,6 +18,8 @@ export function simplifyUpdateStatus(status: UpdateStatus): SimpleUpdateStatus {
     case "downloading-metadata":
     case "downloading-pdf":
       return "processing";
+    case "needs-confirmation":
+      return "needs-confirmation";
     case "up-to-date":
       return "up-to-date";
     case "updated":
@@ -29,6 +36,7 @@ export function sortByStatusPriority(
   const newTableData: UpdateTableData[] = [];
   for (const status of [
     "error",
+    "needs-confirmation",
     "processing",
     "pending",
     "updated",
