@@ -49,9 +49,22 @@ jobs:
           archive: false
 
   test:
+    name: test (Zotero ${{ matrix.zotero }})
     runs-on: ubuntu-latest
     needs:
       - build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - zotero: "8"
+            url: "https://download.zotero.org/client/beta/8.0.2-beta.5%2Bc35d7f21e/Zotero-8.0.2-beta.5%2Bc35d7f21e_linux-x86_64.tar.xz"
+          - zotero: "9"
+            url: "https://download.zotero.org/client/beta/9.0-beta.21%2B1a89239a1/Zotero-9.0-beta.21%2B1a89239a1_linux-x86_64.tar.xz"
+          - zotero: "10"
+            url: "https://download.zotero.org/client/beta/10.0-beta.26%2B7c52e3013/Zotero-10.0-beta.26%2B7c52e3013_linux-x86_64.tar.xz"
+    env:
+      GITHUB_TOKEN: ${{ secrets.GitHub_TOKEN }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -59,4 +72,22 @@ jobs:
           node-version: 24.18.1
           cache: npm
       - run: npm install
-      - run: npm run test
+      - name: Cache Zotero
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/zotero-${{ matrix.zotero }}
+          key: zotero-${{ matrix.zotero }}-${{ matrix.url }}
+      - name: Download and extract Zotero
+        shell: bash
+        run: |
+          set -euo pipefail
+          zotero_dir="${{ runner.temp }}/zotero-${{ matrix.zotero }}"
+          if [ ! -x "$zotero_dir/Zotero_linux-x86_64/zotero" ]; then
+            mkdir -p "$zotero_dir"
+            curl -fL --retry 3 -o "$zotero_dir/zotero.tar.xz" "${{ matrix.url }}"
+            tar -xJf "$zotero_dir/zotero.tar.xz" -C "$zotero_dir"
+            rm "$zotero_dir/zotero.tar.xz"
+          fi
+          echo "ZOTERO_PLUGIN_ZOTERO_BIN_PATH=$zotero_dir/Zotero_linux-x86_64/zotero" >> "$GITHUB_ENV"
+      - name: Run tests
+        run: npm run test
