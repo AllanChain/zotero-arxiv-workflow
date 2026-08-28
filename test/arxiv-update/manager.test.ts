@@ -18,7 +18,8 @@ import {
  * PaperFinder (with an injected Fetcher), imports the journal item (with an
  * injected createItem stub), and merges it into the preprint. Only the two
  * network seams are faked. Dialog-level end-to-end coverage (real dialog +
- * real task) lives in update-dialog.test.ts.
+ * real task) lives in update-dialog.test.ts. The production fetcher's own
+ * behavior (per-host auth headers) lives in fetcher.test.ts.
  */
 describe("update-manager", function () {
   this.timeout(60000);

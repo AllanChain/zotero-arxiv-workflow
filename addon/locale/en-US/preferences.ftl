@@ -16,6 +16,7 @@ pref-source-doi =
     .label = Related DOI
 pref-source-semanticScholar =
     .label = Semantic Scholar
+pref-source-semanticScholar-apiKey = Semantic Scholar API key (optional; avoids waiting on rate limits)
 pref-source-dblp =
     .label = DBLP
 pref-source-pubmed =

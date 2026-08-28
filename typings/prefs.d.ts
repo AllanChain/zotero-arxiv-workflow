@@ -14,6 +14,7 @@ declare namespace _ZoteroTypes {
       "features.updatePDF": boolean;
       "updateSource.doi": boolean;
       "updateSource.semanticScholar": boolean;
+      "updateSource.semanticScholar.apiKey": string;
       "updateSource.dblp": boolean;
       "updateSource.pubmed": boolean;
       "updateSource.arXiv": boolean;

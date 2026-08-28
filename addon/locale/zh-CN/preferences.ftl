@@ -16,6 +16,7 @@ pref-source-doi =
     .label = 关联的 DOI
 pref-source-semanticScholar =
     .label = Semantic Scholar
+pref-source-semanticScholar-apiKey = Semantic Scholar API 密钥（可选，可减少限流后的重试等待）
 pref-source-dblp =
     .label = DBLP
 pref-source-pubmed =

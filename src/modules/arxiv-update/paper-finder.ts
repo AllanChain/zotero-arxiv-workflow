@@ -1,12 +1,5 @@
 import { getPref } from "../../utils/prefs";
-
-// Network seam for PaperFinder. The production implementation (see
-// manager.ts) routes through Zotero's HTTP + per-host queues; tests
-// inject stubs so the finder decision logic runs without real requests.
-export interface Fetcher {
-  fetchText(url: string): Promise<string>;
-  fetchJSON<T = any>(url: string): Promise<T>;
-}
+import type { Fetcher } from "./fetcher";
 
 export interface PaperIdentifier {
   doi?: string;

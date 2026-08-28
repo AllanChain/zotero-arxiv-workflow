@@ -2,64 +2,12 @@ import PQueue from "p-queue";
 import { getString } from "../../utils/locale";
 import { getPref } from "../../utils/prefs";
 import { arXivMerge } from "../arxiv-merge";
-import { Fetcher, PaperFinder, PaperIdentifier } from "./paper-finder";
+import { Fetcher, defaultFetcher, requestBounded } from "./fetcher";
+import { PaperFinder, PaperIdentifier } from "./paper-finder";
 import { UpdateStatus, UpdateTableData } from "../../types";
 import { simplifyUpdateStatus, sortByStatusPriority } from "./status";
 
 type ReportProgress = (status: UpdateStatus, msg?: string) => void;
-
-// Limit concurrent requests per host to avoid being rate-limited.
-const hostQueues = new Map<string, PQueue>();
-function hostQueue(host: string): PQueue {
-  let queue = hostQueues.get(host);
-  if (!queue) {
-    queue = new PQueue({
-      concurrency: 1,
-      intervalCap: 1,
-      interval: 1500,
-    });
-    hostQueues.set(host, queue);
-  }
-  return queue;
-}
-
-// Bound requests so a slow request can't hang the update queue.
-// Zotero.HTTP (not bare `fetch`) routes through Zotero's proxy
-// rewriting, which campus users rely on, and shares the translator
-// framework's HTTP/proxy/cookie footing for follow-up requests.
-// errorDelayMax: 30000 caps Zotero's 5xx retry backoff at 30s (default 1h)
-// so a failing host can't stall the queue. throwOnTimeout: true is a runtime
-// no-op (no queue timeout is set) but narrows p-queue add()'s return type to
-// the task result instead of `TaskResultType | void`.
-function requestBounded(
-  url: string,
-  options: { timeout?: number; responseType?: string } = {},
-): Promise<XMLHttpRequest> {
-  return hostQueue(new URL(url).hostname).add(
-    () =>
-      Zotero.HTTP.request("GET", url, {
-        timeout: 15000,
-        errorDelayMax: 30000,
-        ...options,
-      }),
-    { throwOnTimeout: true },
-  );
-}
-
-async function fetchTextBounded(url: string): Promise<string> {
-  return (await requestBounded(url)).responseText!;
-}
-
-async function fetchJSONBounded<T = any>(url: string): Promise<T> {
-  return JSON.parse((await requestBounded(url)).responseText!) as T;
-}
-
-// Default Fetcher implementation used by PaperFinder; routes through the
-// per-host bounded queue above. Tests inject their own via UpdateManagerOptions.
-const defaultFetcher: Fetcher = {
-  fetchText: fetchTextBounded,
-  fetchJSON: fetchJSONBounded,
-};
 
 async function createItemByZotero(
   paper: PaperIdentifier,
@@ -106,7 +54,7 @@ async function createItemByZotero(
  * stubs so the whole update pipeline runs without the network.
  */
 export interface UpdateManagerOptions {
-  /** Network seam for the finder. Defaults to `defaultFetcher`. */
+  /** Network seam for the finder. Defaults to the bounded production fetcher. */
   fetcher?: Fetcher;
   /**
    * Creates the journal item from a found identifier. Defaults to

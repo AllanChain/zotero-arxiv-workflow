@@ -29,6 +29,7 @@ export type FluentMessageId =
   | 'pref-source-doi'
   | 'pref-source-pubmed'
   | 'pref-source-semanticScholar'
+  | 'pref-source-semanticScholar-apiKey'
   | 'pref-update'
   | 'pref-update-alwaysShowButton'
   | 'pref-update-concurrency'

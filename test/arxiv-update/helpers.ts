@@ -1,8 +1,6 @@
 import PQueue from "p-queue";
-import type {
-  Fetcher,
-  PaperIdentifier,
-} from "../../src/modules/arxiv-update/paper-finder";
+import type { Fetcher } from "../../src/modules/arxiv-update/fetcher";
+import type { PaperIdentifier } from "../../src/modules/arxiv-update/paper-finder";
 import {
   UpdateManager,
   type UpdateManagerOptions,
@@ -18,11 +16,14 @@ export const UPDATE_SOURCES = [
   "arXiv",
 ] as const;
 
-/** Re-enable every update source (tests disable them via setPluginPref). */
+/** Re-enable every update source and clear per-source credentials. */
 export function resetUpdateSourcePrefs() {
   for (const source of UPDATE_SOURCES) {
     setPluginPref(`updateSource.${source}`, true);
   }
+  // `updateSource.*` also holds credentials, not just toggles; reset them all
+  // so no suite has to remember the individual keys (the profile is shared).
+  setPluginPref("updateSource.semanticScholar.apiKey", "");
 }
 
 /** A preprint item whose URL points at a known preprint server. */
