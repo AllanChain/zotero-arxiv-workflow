@@ -1,5 +1,12 @@
 {
   "extends": "zotero-types/entries/sandbox/",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "@test/*": ["./test/*"],
+      "@pkg": ["./package.json"]
+    }
+  },
   "include": ["src", "typings"],
   "exclude": ["build", "addon"]
 }

@@ -1,5 +1,5 @@
 import { assert } from "chai";
-import type Addon from "../src/addon";
+import type Addon from "@/addon";
 import { clearLibrary, createPDFAttachment, getPlugin } from "./helpers";
 
 describe("prefer PDF", function () {

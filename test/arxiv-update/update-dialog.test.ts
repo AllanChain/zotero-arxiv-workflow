@@ -1,16 +1,13 @@
 import { assert } from "chai";
 import PQueue from "p-queue";
 import type { VirtualizedTableHelper } from "zotero-plugin-toolkit";
-import type Addon from "../../src/addon";
-import { config } from "../../package.json";
-import {
-  arXivUpdate,
-  isUpdateMenuVisible,
-} from "../../src/modules/arxiv-update";
-import { UpdateManager } from "../../src/modules/arxiv-update/manager";
-import { UpdateDialog } from "../../src/modules/arxiv-update/update-dialog";
-import { getString } from "../../src/utils/locale";
-import { clearLibrary, getPlugin, setPluginPref } from "../helpers";
+import type Addon from "@/addon";
+import { config } from "@pkg";
+import { arXivUpdate, isUpdateMenuVisible } from "@/modules/arxiv-update";
+import { UpdateManager } from "@/modules/arxiv-update/manager";
+import { UpdateDialog } from "@/modules/arxiv-update/update-dialog";
+import { getString } from "@/utils/locale";
+import { clearLibrary, getPlugin, setPluginPref } from "@test/helpers";
 import {
   createFetcher,
   createPreprintItem,

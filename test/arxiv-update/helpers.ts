@@ -1,11 +1,11 @@
 import PQueue from "p-queue";
-import type { Fetcher } from "../../src/modules/arxiv-update/fetcher";
-import type { PaperIdentifier } from "../../src/modules/arxiv-update/paper-finder";
+import type { Fetcher } from "@/modules/arxiv-update/fetcher";
+import type { PaperIdentifier } from "@/modules/arxiv-update/paper-finder";
 import {
   UpdateManager,
   type UpdateManagerOptions,
-} from "../../src/modules/arxiv-update/manager";
-import { setPluginPref } from "../helpers";
+} from "@/modules/arxiv-update/manager";
+import { setPluginPref } from "@test/helpers";
 
 /** Update sources toggleable via the `updateSource.*` prefs. */
 export const UPDATE_SOURCES = [

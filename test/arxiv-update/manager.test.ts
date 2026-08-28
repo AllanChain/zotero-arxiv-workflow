@@ -1,9 +1,9 @@
 import { assert } from "chai";
-import type Addon from "../../src/addon";
-import type { PaperIdentifier } from "../../src/modules/arxiv-update/paper-finder";
-import type { UpdateManager } from "../../src/modules/arxiv-update/manager";
-import { UpdateDialog } from "../../src/modules/arxiv-update/update-dialog";
-import { clearLibrary, getPlugin, setPluginPref } from "../helpers";
+import type Addon from "@/addon";
+import type { PaperIdentifier } from "@/modules/arxiv-update/paper-finder";
+import type { UpdateManager } from "@/modules/arxiv-update/manager";
+import { UpdateDialog } from "@/modules/arxiv-update/update-dialog";
+import { clearLibrary, getPlugin, setPluginPref } from "@test/helpers";
 import {
   createFetcher,
   createJournalItem,

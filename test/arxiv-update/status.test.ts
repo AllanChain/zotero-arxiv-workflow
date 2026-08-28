@@ -2,8 +2,8 @@ import { assert } from "chai";
 import {
   simplifyUpdateStatus,
   sortByStatusPriority,
-} from "../../src/modules/arxiv-update/status";
-import type { UpdateStatus } from "../../src/types";
+} from "@/modules/arxiv-update/status";
+import type { UpdateStatus } from "@/types";
 
 describe("status", function () {
   describe("simplifyUpdateStatus", function () {

@@ -6,8 +6,8 @@ import {
   isKnownPreprintURL,
   localarXivVersion,
   matchTitle,
-} from "../../src/modules/arxiv-update/paper-finder";
-import { clearLibrary, getPlugin, setPluginPref } from "../helpers";
+} from "@/modules/arxiv-update/paper-finder";
+import { clearLibrary, getPlugin, setPluginPref } from "@test/helpers";
 import {
   createFetcher,
   createPreprintItem,

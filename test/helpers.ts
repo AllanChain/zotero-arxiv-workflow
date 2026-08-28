@@ -1,5 +1,5 @@
-import type Addon from "../src/addon";
-import { config } from "../package.json";
+import type Addon from "@/addon";
+import { config } from "@pkg";
 
 export function getPlugin(): Addon {
   // @ts-expect-error string access not typed
