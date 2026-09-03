@@ -6,6 +6,7 @@ import {
   isKnownPreprintURL,
   localarXivVersion,
   matchTitle,
+  normalizePreprintURL,
 } from "@/modules/arxiv-update/paper-finder";
 import { clearLibrary, getPlugin, setPluginPref } from "@test/helpers";
 import {
@@ -62,8 +63,46 @@ describe("paper-finder", function () {
       );
     });
 
+    it("accepts alphaXiv URLs", function () {
+      assert.isTrue(
+        isKnownPreprintURL("https://www.alphaxiv.org/abs/2502.16161"),
+      );
+    });
+
     it("rejects unknown hosts", function () {
       assert.isFalse(isKnownPreprintURL("https://example.com/paper"));
+    });
+  });
+
+  describe("normalizePreprintURL", function () {
+    it("maps alphaXiv URLs to the arXiv abstract page", function () {
+      assert.equal(
+        normalizePreprintURL("https://www.alphaxiv.org/abs/2502.16161"),
+        "https://arxiv.org/abs/2502.16161",
+      );
+      assert.equal(
+        normalizePreprintURL("https://alphaxiv.org/abs/2502.16161v2"),
+        "https://arxiv.org/abs/2502.16161v2",
+      );
+      assert.equal(
+        normalizePreprintURL("https://www.alphaxiv.org/pdf/2502.16161.pdf"),
+        "https://arxiv.org/abs/2502.16161",
+      );
+      assert.equal(
+        normalizePreprintURL("https://www.alphaxiv.org/overview/2502.16161"),
+        "https://arxiv.org/abs/2502.16161",
+      );
+    });
+
+    it("leaves other URLs untouched", function () {
+      assert.equal(
+        normalizePreprintURL("https://arxiv.org/abs/1234.5678"),
+        "https://arxiv.org/abs/1234.5678",
+      );
+      assert.equal(
+        normalizePreprintURL("https://example.com/paper"),
+        "https://example.com/paper",
+      );
     });
   });
 
@@ -122,6 +161,23 @@ describe("paper-finder", function () {
   });
 
   describe("relatedDOI", function () {
+    it("treats alphaXiv items as arXiv items", async function () {
+      const item = await createPreprintItem(
+        "https://www.alphaxiv.org/abs/1234.5678",
+      );
+      const { fetcher, calls } = createFetcher({
+        fetchText: async () => '<html data-doi="10.1000/published"></html>',
+      });
+      const paper = await new PaperFinder(item, fetcher).relatedDOI();
+      assert.deepEqual(paper, {
+        doi: "10.1000/published",
+        title: "Published PDF",
+      });
+      assert.deepEqual(calls, [
+        { type: "text", url: "https://arxiv.org/abs/1234.5678" },
+      ]);
+    });
+
     it("extracts the DOI from an arXiv abstract page", async function () {
       const item = await createPreprintItem("https://arxiv.org/abs/1234.5678");
       const { fetcher, calls } = createFetcher({

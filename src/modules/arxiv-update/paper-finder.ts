@@ -15,9 +15,38 @@ const KNOWN_PREPRINT_SERVERS = {
   psyarxiv: "osf.io",
 };
 
+// The menu-visibility check runs over arbitrary selected items whose URL
+// field may be empty or malformed, so URL parsing must not throw.
+function parseURL(url: string): URL | undefined {
+  try {
+    return new URL(url);
+  } catch {
+    return undefined;
+  }
+}
+
+export function isAlphaXivURL(url: string): boolean {
+  const host = parseURL(url)?.hostname;
+  return host === "alphaxiv.org" || (host?.endsWith(".alphaxiv.org") ?? false);
+}
+
+// alphaXiv mirrors arXiv papers under the same identifiers (e.g.
+// alphaxiv.org/abs/2502.16161), so map its URLs to the canonical arXiv
+// abstract page and let every finder treat them as regular arXiv items.
+export function normalizePreprintURL(url: string): string {
+  if (!isAlphaXivURL(url)) return url;
+  const match = new URL(url).pathname.match(
+    /^\/(?:abs|pdf|overview)\/(?<id>.+?)(?:\.pdf)?\/?$/,
+  );
+  return match?.groups?.id ? `https://arxiv.org/abs/${match.groups.id}` : url;
+}
+
 export function isKnownPreprintURL(url: string): boolean {
-  const urlHost = new URL(url).hostname;
-  return Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost);
+  const urlHost = parseURL(normalizePreprintURL(url))?.hostname;
+  return (
+    urlHost !== undefined &&
+    Object.values(KNOWN_PREPRINT_SERVERS).includes(urlHost)
+  );
 }
 
 export function matchTitle(base: string, target: any): boolean {
@@ -63,7 +92,7 @@ export class PaperFinder {
     private fetch: Fetcher,
   ) {
     this.item = preprintItem;
-    this.preprintURL = preprintItem.getField("url");
+    this.preprintURL = normalizePreprintURL(preprintItem.getField("url"));
     this.title = preprintItem.getDisplayTitle();
     if (!isKnownPreprintURL(this.preprintURL)) {
       throw `${this.preprintURL} is not a valid preprint server URL`;
@@ -246,7 +275,7 @@ export class PaperFinder {
     const { hasPDF, version: localVersion } = localarXivVersion(pdfTexts);
     ztoolkit.log(`Current arXiv version: ${localVersion}`);
     if (hasPDF && localVersion === 0) return undefined;
-    const htmlContent = await this.fetch.fetchText(this.item.getField("url"));
+    const htmlContent = await this.fetch.fetchText(this.preprintURL);
     const onlineVersion = extractOnlineVersion(htmlContent);
     if (onlineVersion === undefined) return undefined;
     if (hasPDF && onlineVersion <= localVersion) return undefined;

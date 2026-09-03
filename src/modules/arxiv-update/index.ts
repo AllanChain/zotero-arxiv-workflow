@@ -1,7 +1,7 @@
 import { config } from "../../../package.json";
 import { getPref } from "../../utils/prefs";
 import { catchError } from "../error";
-import { isKnownPreprintURL } from "./paper-finder";
+import { isAlphaXivURL, isKnownPreprintURL } from "./paper-finder";
 import { UpdateDialog } from "./update-dialog";
 
 export function isUpdateMenuVisible(
@@ -11,6 +11,16 @@ export function isUpdateMenuVisible(
   return alwaysShowButton
     ? knownPreprint.some(Boolean)
     : knownPreprint.every(Boolean);
+}
+
+export function isUpdatableItem(item: Zotero.Item): boolean {
+  if (!item.isRegularItem()) return false;
+  const url = item.getField("url");
+  // alphaXiv has no preprint translator — Zotero saves its pages as journal
+  // articles or web pages — so require the preprint type only for the other
+  // preprint servers.
+  if (item.itemType !== "preprint" && !isAlphaXivURL(url)) return false;
+  return isKnownPreprintURL(url);
 }
 
 export class arXivUpdate {
@@ -39,10 +49,7 @@ export class arXivUpdate {
           onShowing: (ev, { setVisible }) => {
             const isKnownPreprintItem = (
               Zotero.getActiveZoteroPane()?.getSelectedItems() ?? []
-            ).map((item) => {
-              if (item.itemType !== "preprint") return false;
-              return isKnownPreprintURL(item.getField("url"));
-            });
+            ).map(isUpdatableItem);
             setVisible(
               isUpdateMenuVisible(
                 isKnownPreprintItem,
