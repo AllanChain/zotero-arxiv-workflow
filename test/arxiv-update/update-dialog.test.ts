@@ -3,7 +3,11 @@ import PQueue from "p-queue";
 import type { VirtualizedTableHelper } from "zotero-plugin-toolkit";
 import type Addon from "@/addon";
 import { config } from "@pkg";
-import { arXivUpdate, isUpdateMenuVisible } from "@/modules/arxiv-update";
+import {
+  arXivUpdate,
+  isUpdatableItem,
+  isUpdateMenuVisible,
+} from "@/modules/arxiv-update";
 import { UpdateManager } from "@/modules/arxiv-update/manager";
 import { UpdateDialog } from "@/modules/arxiv-update/update-dialog";
 import { getString } from "@/utils/locale";
@@ -143,6 +147,50 @@ describe("update-dialog", function () {
     it("requires every item to qualify otherwise", function () {
       assert.isFalse(isUpdateMenuVisible([true, false], false));
       assert.isTrue(isUpdateMenuVisible([true, true], false));
+    });
+  });
+
+  describe("isUpdatableItem", function () {
+    async function createItem(
+      itemType: _ZoteroTypes.Item.ItemType,
+      url: string,
+    ) {
+      const item = new Zotero.Item(itemType);
+      item.setField("title", "Test paper");
+      if (url) item.setField("url", url);
+      await item.saveTx();
+      return item;
+    }
+
+    it("accepts preprint items from known preprint servers", async function () {
+      const item = await createItem(
+        "preprint",
+        "https://arxiv.org/abs/1234.5678",
+      );
+      assert.isTrue(isUpdatableItem(item));
+    });
+
+    it("requires the preprint type for non-alphaXiv URLs", async function () {
+      const item = await createItem(
+        "journalArticle",
+        "https://arxiv.org/abs/1234.5678",
+      );
+      assert.isFalse(isUpdatableItem(item));
+    });
+
+    it("accepts alphaXiv items regardless of item type", async function () {
+      for (const itemType of ["journalArticle", "webpage"] as const) {
+        const item = await createItem(
+          itemType,
+          "https://www.alphaxiv.org/abs/2502.16161",
+        );
+        assert.isTrue(isUpdatableItem(item), `item type ${itemType}`);
+      }
+    });
+
+    it("rejects items without a URL", async function () {
+      const item = await createItem("preprint", "");
+      assert.isFalse(isUpdatableItem(item));
     });
   });
 
