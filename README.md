@@ -173,7 +173,10 @@ If you have a preprint item and want to find if it has been published in a journ
    2. [Semantic Scholar](https://www.semanticscholar.org) API
    3. [DBLP](https://dblp.org) API
    4. [PubMed](https://pubmed.ncbi.nlm.nih.gov) API
-2. If no published version found, the plugin will search [arXiv](https://arxiv.org) for updated versions
+
+   DBLP and PubMed are matched by title, so a paper the publisher renamed can still be found — when it is, the plugin asks you before merging (see below).
+
+2. If no published version is found, or you tell the plugin that the suggestion was wrong, it then checks [arXiv](https://arxiv.org) for a newer version of your preprint
 
 > [!Note]
 >
@@ -181,6 +184,21 @@ If you have a preprint item and want to find if it has been published in a journ
 
 If a published version is found, a new item will be created automatically and the published PDF will be downloaded. If you do not have access to the journal PDFs, you can disable downloading PDF from settings, and just update the metadata.
 After that, the preprint item and the newly created journal item will be merged with the same logic as mentioned earlier.
+
+Because the search matches on the title, your paper can still be found when the publisher changed its name slightly:
+
+- Your preprint: SOAP: Improving and Stabilizing Shampoo using Adam
+- The published version: SOAP: Improving and Stabilizing Shampoo using Adam **for Language Modeling**
+
+Two things must also be true before the plugin offers such a match: the first author has to be the same person, and the published paper cannot be older than your preprint.
+
+Even then the plugin does not merge it, because a similar title is not proof. The row turns orange and says **Fuzzy match found.** with a **Click to check** link. That link opens a dialog which puts the two titles under each other and colors the words that differ, so you can see how close the match is. It also tells you which database the suggestion came from, where the paper was published and when, and links to the published paper's page so you can look it up yourself. Then:
+
+- **Confirm** merges the published version into your preprint, exactly as an automatic match would.
+- **Skip** means "not my paper". Your preprint is left as it is and the plugin only checks arXiv for a newer version.
+- Closing the dialog decides nothing. The row stays orange, and it survives closing the update window, so you can answer later.
+
+Nothing is merged and nothing is deleted before you confirm.
 
 <details>
 <summary>JavaScript API</summary>
@@ -192,6 +210,8 @@ async Zotero.arXivWorkflow.api.arXivUpdate(
 ```
 
 This function assumes that the argument is an arXiv item, and no checks will be performed to ensure this. The function caller is responsible to perform the checks.
+
+The call returns as soon as the update window is open; it does not wait for the update to finish. If the plugin finds a match it is not sure about, the item stays orange in that window until you confirm or skip it.
 
 </details>
 

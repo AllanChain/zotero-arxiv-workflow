@@ -14,9 +14,13 @@ with TypeScript, `zotero-plugin-toolkit`, and `zotero-plugin-scaffold`.
 - `src/modules/arxiv-update/` — the update pipeline, split by responsibility:
   `fetcher.ts` all network I/O (per-host throttle, timeouts, credentials),
   `paper-finder.ts` "which DOI/URL does this preprint correspond to" (one
-  method per source), `manager.ts` `UpdateManager` (task queue + row state,
-  notifies `onChange`), `update-dialog.ts` the dialog window/table,
-  `status.ts` status grouping and sort order.
+  method per source, `find()` as a resumable generator), `manager.ts`
+  `UpdateManager` (task queue, row state, and the paused reviews, notifies
+  `onChange`), `update-dialog.ts` the dialog window/table plus the
+  candidate-confirm window, `status.ts` status grouping and sort order.
+  Shared pure matching lives in `src/utils/title-match.ts`; the row/paper
+  types (`PaperIdentifier`, `CandidateInfo`, `FinderIterator`,
+  `UpdateTableData`) are in `src/types.ts`.
 - `test/` — mocha specs mirroring the `src/` layout (`test/arxiv-update/` for
   the update feature). `test/helpers.ts` is Zotero test setup;
   `test/arxiv-update/helpers.ts` holds shared update fixtures.
@@ -76,9 +80,40 @@ and a scratch profile. Tests are offline by design — see below.
   pref/logging/request-option injection to `PaperFinder` — tests have real prefs
   (via `setPluginPref`) and real `ztoolkit` (via `getPlugin()`).
 - **`PaperFinder.find()` tries enabled sources in a fixed order** (`updateSource.*`
-  prefs) and swallows each source's failure, returning the first hit. A missing
-  result is therefore "no source matched", not "no error occurred" — check the
-  task log before assuming a source is broken.
+  prefs) and swallows each source's failure. A _definitive_ result — a DOI from
+  `relatedDOI`/`semanticScholar`, or an exact title match from DBLP/PubMed —
+  wins immediately and later sources are never queried. Fuzzy matches never
+  are: the strongest one across _all_ published sources is held for user
+  confirmation, so a strong PubMed hit beats a weak DBLP hit regardless of
+  order. A missing result is therefore "no source matched", not "no error
+  occurred" — check the task log before assuming a source is broken.
+- **`find()` is a resumable generator, not a promise.** It yields the best
+  `TentativePaperIdentifier` and stops; `_all_` published sources have already
+  been queried by then, so a yield costs the whole published search. Resuming
+  it means the user _rejected_ the candidate, which is what unlocks the arXiv
+  self-update stage; confirming never resumes it (the approved candidate is
+  imported directly). Don't "simplify" this to a promise — the pause is the
+  feature. Only one candidate is surfaced per run; the rest are dropped.
+- **A `needs-confirmation` row is parked state in the manager, not a waiting
+  task.** The task reports the status and returns, freeing its concurrency
+  slot; `UpdateManager.reviews` (keyed by row id) holds the item, the
+  candidate, and the paused iterator until the user acts. `confirm()` /
+  `skip()` both re-enter through `runTask`, so they stay throttled — never do
+  that work inline. Parked rows survive the dialog window closing, and nothing
+  yet drops a review when its item is deleted from the library.
+- **`PaperIdentifier` is a discriminated union on `tentative`** (`src/types.ts`):
+  `{ tentative: true, candidate }` for a fuzzy match, `tentative?: false`
+  otherwise. Use `isTentativePaperIdentifier()` to branch; a fuzzy candidate is
+  only importable after confirmation, so nothing may treat `candidate` as
+  optional on the tentative side.
+- **Update-table cells bind to the row id, never the render `index`** —
+  `sortByStatusPriority` reorders rows on every `updateRow`, so an index
+  captured at render time can name a different row by click time. For the same
+  reason `UpdateDialog.openCandidateDialog` holds the dialog _window_ and is
+  written once, never cleared: the click guard asks `window.closed`. An "is a
+  dialog open" flag that several code paths reset (including the dialog's
+  `unload`) is what races — a late reset unlocks a dialog opened afterwards, a
+  missed reset locks the feature forever.
 - **`UpdateManager` has two injectable seams** (`UpdateManagerOptions`):
   `fetcher` and `createItem`. Tests replace both so find → import → merge →
   report runs offline; the production defaults are `defaultFetcher` and the
@@ -96,10 +131,17 @@ and a scratch profile. Tests are offline by design — see below.
 - **Test bundles run as scripts in the Zotero window, not the plugin sandbox**,
   so `ztoolkit` / `addon` are undefined until `getPlugin()` runs in a `before`
   hook. Any spec that imports `src/` modules needs that call first.
-- **Dialog tests drive the real `update-dialog.xhtml`** (chrome:// resolves
-  because the tester loads the real plugin) and rely on `UpdateDialog`'s statics
-  (`window`, `tableHelper`, `open`) as the seam — fake `window` as
-  `{ document, closed }` and restore the statics in `afterEach`.
+- **Dialog tests drive the real `update-dialog.xhtml`** and
+  `candidate-confirm.xhtml` (chrome:// resolves because the tester loads the
+  real plugin) and rely on `UpdateDialog`'s statics (`window`, `tableHelper`,
+  `open`, `openCandidateDialog`) as the seam — fake `window` as
+  `{ document, closed }` and restore the statics in `afterEach`. Confirmation
+  tests seed `manager.reviews` directly instead of running a finder, and find
+  the live confirm dialog by enumerating `Services.wm` for the preprint-title
+  element (see `findCandidateDialogs`).
+- **Keep the fuzzy fixtures honest.** `createDBLPFuzzyHit()` / `createSOAPPreprint()`
+  mirror the real #106 case (extended title, same first author, same year); the
+  preprint fixture needs a `date` or the year gate is only half-tested.
 
 ## Commits & PRs
 

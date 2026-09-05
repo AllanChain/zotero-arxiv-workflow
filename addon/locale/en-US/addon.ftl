@@ -24,10 +24,29 @@ update-status =
   .finding-update = Finding updated version
   .downloading-metadata = Downloading paper metadata
   .downloading-pdf = Downloading paper PDF
+  .needs-confirmation = Awaiting confirmation
   .up-to-date = No update found
   .updated = Paper updated
   .download-error = Failed to download paper metadata
   .general-error = Update failed
+
+review-candidate =
+  .dblp = DBLP
+  .pubmed = PubMed
+
+review-prompt = Fuzzy match found.
+
+candidate-confirm-title = Confirm Fuzzy Match
+candidate-confirm-message = A fuzzy match was found for this preprint. Review the candidate below, then confirm to merge the published version into the preprint, or skip to keep the preprint as is.
+
+review-action =
+  .confirm = Confirm
+  .skip = Skip
+  .click-to-check = Click to check
+  .view-candidate = View candidate page
+
+review-message =
+  .skipped = Candidate skipped
 
 update-pdf-prompt = Download latest PDF
   .download = Downloading PDF...
