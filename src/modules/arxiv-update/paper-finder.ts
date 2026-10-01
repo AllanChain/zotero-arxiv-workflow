@@ -59,6 +59,17 @@ export function extractOnlineVersion(html: string): number | undefined {
 // surfacing for confirmation.
 const PUBMED_CANDIDATE_LIMIT = 10;
 
+// Number of Crossref hits to request: relevance ranking keeps the target
+// near the top when the query is narrowed by the first author.
+const CROSSREF_CANDIDATE_LIMIT = 20;
+
+// Only these Crossref record types count as published versions. Excluding
+// `posted-content` matters: for a preprint that was later published, the
+// publisher-posted preprint record ranks ABOVE the journal article under a
+// title query (verified against the live API).
+const CROSSREF_PUBLISHED_TYPES_FILTER =
+  "type:journal-article,type:proceedings-article,type:book-chapter";
+
 // Narrow typed views of the external API responses the finders actually read.
 interface DBLPHitInfo {
   title?: string;
@@ -79,6 +90,14 @@ interface PubMedPaper {
   articleids?: Array<{ idtype?: string; value?: string }>;
 }
 
+interface CrossrefWork {
+  DOI?: string;
+  title?: string[];
+  author?: Array<{ family?: string; given?: string }>;
+  issued?: { "date-parts"?: number[][] };
+  "container-title"?: string[];
+}
+
 /**
  * Shared fuzzy gates for DBLP and PubMed: the candidate's first author must
  * match the preprint's, and the published year cannot predate the preprint.
@@ -89,7 +108,7 @@ export function fuzzyGateReason(
   preprintFirstAuthor: string | undefined,
   preprintYear: string | number | undefined,
   candidateFirstAuthor: string | undefined,
-  candidateYear: string | undefined,
+  candidateYear: string | number | undefined,
 ): string | undefined {
   if (!firstAuthorSurnameMatches(preprintFirstAuthor, candidateFirstAuthor)) {
     return "author mismatch";
@@ -182,6 +201,13 @@ export class PaperFinder {
         name: "pubMed",
         enabled: getPref("updateSource.pubmed"),
         run: () => this.pubMed(),
+      },
+      {
+        name: "crossref",
+        // Crossref is a normal toggleable source; a contact email is
+        // optional (see crossref()).
+        enabled: getPref("updateSource.crossref"),
+        run: () => this.crossref(),
       },
     ];
     // A failing finder must not abort the others. Absence is reported once
@@ -482,6 +508,82 @@ export class PaperFinder {
         // PubMed's abstract page is free to view and lets the user verify
         // the title, authors, and journal before confirming the match.
         url: `https://pubmed.ncbi.nlm.nih.gov/${paperId}/`,
+      },
+    };
+  }
+
+  async crossref(): Promise<PaperIdentifier[]> {
+    // The source is a normal toggle (`updateSource.crossref`). A contact
+    // email is optional but recommended: when set it routes requests into
+    // Crossref's "polite pool" as a `mailto` query parameter. Zotero's own
+    // Crossref translator passes the address the same way, so this finder
+    // stays on the URL-only Fetcher seam (no header plumbing).
+    const params = new URLSearchParams({
+      "query.title": this.title,
+      rows: String(CROSSREF_CANDIDATE_LIMIT),
+      select: "DOI,title,author,issued,container-title",
+      filter: CROSSREF_PUBLISHED_TYPES_FILTER,
+    });
+    const email = getPref("updateSource.crossref.email").trim();
+    if (email) params.set("mailto", email);
+    // A title-only query can rank homonymous works by other authors above
+    // the target, so narrow with the first author whenever available.
+    const firstAuthor = this.item.getCreators()[0]?.lastName;
+    if (firstAuthor) params.set("query.author", firstAuthor);
+    ztoolkit.log(
+      `Crossref query: ${firstAuthor ? `${this.title} ${firstAuthor}` : this.title}`,
+    );
+    const url = `https://api.crossref.org/works?${params}`;
+    const json = await this.fetch.fetchJSON<{
+      message?: { items?: CrossrefWork[] };
+    }>(url);
+    const works = json?.message?.items ?? [];
+    return works
+      .map((work) => this.toCrossrefCandidate(work))
+      .filter((c): c is PaperIdentifier => c !== undefined);
+  }
+
+  /** One candidate per Crossref work: definitive on an exact title, tentative on a fuzzy one. */
+  private toCrossrefCandidate(work: CrossrefWork): PaperIdentifier | undefined {
+    const title = work.title?.[0];
+    if (typeof title !== "string") return undefined;
+    const match = evaluateTitlePair(this.title, title);
+    if (match.kind === "reject") return undefined;
+    const doi = work.DOI;
+    if (match.kind === "exact") {
+      if (doi) {
+        ztoolkit.log(`Crossref matched ${doi}`);
+        return { doi, title: "Published PDF" };
+      }
+      // Exact match without a DOI is not importable; keep looking.
+      return undefined;
+    }
+    const year = work.issued?.["date-parts"]?.[0]?.[0];
+    const firstAuthorFamily = work.author?.[0]?.family;
+    const gateReason = fuzzyGateReason(
+      this.item.getCreators()[0]?.lastName,
+      this.item.getField("year"),
+      firstAuthorFamily,
+      year,
+    );
+    if (gateReason) {
+      ztoolkit.log(`Crossref: fuzzy candidate ${doi} rejected (${gateReason})`);
+      return undefined;
+    }
+    if (!doi) return undefined;
+    return {
+      doi,
+      title: "Published PDF",
+      tentative: true,
+      candidate: {
+        source: "Crossref",
+        candidateTitle: title,
+        publication: work["container-title"]?.[0],
+        year: year === undefined ? undefined : String(year),
+        score: match.score,
+        // The DOI resolver page lets the user verify the title, authors,
+        // and journal before confirming the match.
+        url: `https://doi.org/${doi}`,
       },
     };
   }

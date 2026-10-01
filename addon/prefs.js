@@ -8,6 +8,8 @@ pref("__prefsPrefix__.updateSource.semanticScholar", true);
 pref("__prefsPrefix__.updateSource.semanticScholar.apiKey", "");
 pref("__prefsPrefix__.updateSource.dblp", true);
 pref("__prefsPrefix__.updateSource.pubmed", true);
+pref("__prefsPrefix__.updateSource.crossref", true);
+pref("__prefsPrefix__.updateSource.crossref.email", "");
 pref("__prefsPrefix__.updateSource.arXiv", true);
 pref("__prefsPrefix__.mergePreferJournalPDF", true);
 pref(

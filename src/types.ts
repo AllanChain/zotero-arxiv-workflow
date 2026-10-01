@@ -1,4 +1,4 @@
-export type CandidateSource = "DBLP" | "PubMed";
+export type CandidateSource = "DBLP" | "PubMed" | "Crossref";
 
 export type CandidateInfo = {
   source: CandidateSource;

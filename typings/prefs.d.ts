@@ -17,6 +17,8 @@ declare namespace _ZoteroTypes {
       "updateSource.semanticScholar.apiKey": string;
       "updateSource.dblp": boolean;
       "updateSource.pubmed": boolean;
+      "updateSource.crossref": boolean;
+      "updateSource.crossref.email": string;
       "updateSource.arXiv": boolean;
       "mergePreferJournalPDF": boolean;
       "merge.reservedKeys": string;

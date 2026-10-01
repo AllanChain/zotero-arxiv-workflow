@@ -14,6 +14,7 @@ import {
 import { FUZZY_TITLE_THRESHOLD } from "@/utils/title-match";
 import { clearLibrary, getPlugin, setPluginPref } from "@test/helpers";
 import {
+  createCrossrefFuzzyHit,
   createDBLPFuzzyHit,
   createFetcher,
   createPreprintItem,
@@ -563,6 +564,151 @@ describe("paper-finder", function () {
     });
   });
 
+  describe("crossref", function () {
+    const CROSSREF_EMAIL = "user@example.com";
+    const SOAP_TITLE = "SOAP: Improving and Stabilizing Shampoo using Adam";
+    const SOAP_HIT_TITLE =
+      "SOAP: Improving and Stabilizing Shampoo using Adam for Language Modeling";
+
+    beforeEach(function () {
+      setPluginPref("updateSource.crossref.email", CROSSREF_EMAIL);
+    });
+
+    it("omits the polite-pool mailto when no contact email is set", async function () {
+      setPluginPref("updateSource.crossref.email", "");
+      const item = await createSOAPPreprint();
+      const { fetcher, calls } = createFetcher({
+        fetchJSON: async () => ({ message: { items: [] } }),
+      });
+      assert.deepEqual(await new PaperFinder(item, fetcher).crossref(), []);
+      assert.lengthOf(calls, 1);
+      assert.notInclude(calls[0].url, "mailto=");
+    });
+
+    it("queries by title, first author, and the polite-pool mailto", async function () {
+      const item = await createSOAPPreprint();
+      const { fetcher, calls } = createFetcher({
+        fetchJSON: async () => ({ message: { items: [] } }),
+      });
+      await new PaperFinder(item, fetcher).crossref();
+      assert.include(calls[0].url, "https://api.crossref.org/works?");
+      assert.include(calls[0].url, "query.title=");
+      assert.include(calls[0].url, "query.author=Vyas");
+      // URLSearchParams percent-encodes the address.
+      assert.include(calls[0].url, "mailto=user%40example.com");
+      // Preprints (`posted-content`) must be excluded server-side: they
+      // rank above the journal article for the same title.
+      assert.include(
+        calls[0].url,
+        "filter=type%3Ajournal-article%2Ctype%3Aproceedings-article%2Ctype%3Abook-chapter",
+      );
+    });
+
+    it("queries with the title only when the item has no authors", async function () {
+      const item = await createPreprintItem("https://arxiv.org/abs/1234.5678", {
+        title: "Attention Is All You Need",
+      });
+      const { fetcher, calls } = createFetcher({
+        fetchJSON: async () => ({ message: { items: [] } }),
+      });
+      await new PaperFinder(item, fetcher).crossref();
+      assert.include(calls[0].url, "query.title=");
+      assert.notInclude(calls[0].url, "query.author=");
+    });
+
+    it("returns an empty list when no work matches the title", async function () {
+      const item = await createSOAPPreprint();
+      const { fetcher } = createFetcher({
+        fetchJSON: async () => ({
+          message: {
+            items: [createCrossrefFuzzyHit({ title: ["A different paper"] })],
+          },
+        }),
+      });
+      assert.deepEqual(await new PaperFinder(item, fetcher).crossref(), []);
+    });
+
+    it("surfaces a passing fuzzy hit as a tentative candidate", async function () {
+      const item = await createSOAPPreprint(undefined, {
+        date: "2024-09-17",
+      });
+      const { fetcher } = createFetcher({
+        fetchJSON: async () => ({
+          message: { items: [createCrossrefFuzzyHit()] },
+        }),
+      });
+      const [paper] = await new PaperFinder(item, fetcher).crossref();
+      assert.ok(
+        isTentativePaperIdentifier(paper),
+        "fuzzy match should be tentative",
+      );
+      const t = paper as TentativePaperIdentifier;
+      assert.equal(t.doi, "10.5555/soap-crossref");
+      assert.equal(t.title, "Published PDF");
+      assert.equal(t.candidate.source, "Crossref");
+      assert.equal(
+        t.candidate.publication,
+        "Journal of Machine Learning Research",
+      );
+      assert.equal(t.candidate.year, "2024");
+      assert.isAtLeast(t.candidate.score, FUZZY_TITLE_THRESHOLD);
+      assert.equal(t.candidate.candidateTitle, SOAP_HIT_TITLE);
+      assert.equal(t.candidate.url, "https://doi.org/10.5555/soap-crossref");
+    });
+
+    it("rejects a fuzzy hit whose first author does not match", async function () {
+      const item = await createSOAPPreprint(undefined, {
+        date: "2024-09-17",
+      });
+      const { fetcher } = createFetcher({
+        fetchJSON: async () => ({
+          message: {
+            items: [
+              createCrossrefFuzzyHit({
+                author: [{ family: "Ng", given: "Andrew" }],
+              }),
+            ],
+          },
+        }),
+      });
+      assert.deepEqual(await new PaperFinder(item, fetcher).crossref(), []);
+    });
+
+    it("rejects a fuzzy hit published before the preprint", async function () {
+      const item = await createSOAPPreprint(undefined, {
+        date: "2024-09-17",
+      });
+      const { fetcher } = createFetcher({
+        fetchJSON: async () => ({
+          message: {
+            items: [
+              createCrossrefFuzzyHit({ issued: { "date-parts": [[2023]] } }),
+            ],
+          },
+        }),
+      });
+      assert.deepEqual(await new PaperFinder(item, fetcher).crossref(), []);
+    });
+
+    it("skips an exact match without a DOI and resolves the next hit", async function () {
+      const item = await createSOAPPreprint();
+      const { fetcher } = createFetcher({
+        fetchJSON: async () => ({
+          message: {
+            items: [
+              // Exact title, but nothing importable: keep looking.
+              createCrossrefFuzzyHit({ title: [SOAP_TITLE], DOI: undefined }),
+              createCrossrefFuzzyHit({ title: [SOAP_TITLE] }),
+            ],
+          },
+        }),
+      });
+      assert.deepEqual(await new PaperFinder(item, fetcher).crossref(), [
+        { doi: "10.5555/soap-crossref", title: "Published PDF" },
+      ]);
+    });
+  });
+
   describe("arXivPDF", function () {
     it("returns the download candidate when there is no local PDF", async function () {
       const item = await createPreprintItem("https://arxiv.org/abs/1234.5678");
@@ -635,6 +781,7 @@ describe("paper-finder", function () {
       setPluginPref("updateSource.semanticScholar", false);
       setPluginPref("updateSource.dblp", true);
       setPluginPref("updateSource.pubmed", false);
+      setPluginPref("updateSource.crossref", false);
       setPluginPref("updateSource.arXiv", false);
       const item = await createPreprintItem("https://arxiv.org/abs/1234.5678", {
         title: "Attention Is All You Need",
@@ -688,7 +835,45 @@ describe("paper-finder", function () {
       assert.isUndefined(await runFinder(new PaperFinder(item, fetcher)));
       assert.deepEqual(
         calls.map((c) => c.type),
-        ["text", "json", "json", "json", "text"],
+        ["text", "json", "json", "json", "json", "text"],
+      );
+    });
+
+    it("consults crossref after the other sources when enabled", async function () {
+      setPluginPref("updateSource.crossref", true);
+      const item = await createSOAPPreprint(undefined, {
+        date: "2024-09-17",
+      });
+      const { fetcher, calls } = createFetcher({
+        fetchText: async () => "<html></html>",
+        fetchJSON: async (url) =>
+          url.includes("api.crossref.org")
+            ? {
+                message: {
+                  items: [
+                    createCrossrefFuzzyHit({
+                      title: [
+                        "SOAP: Improving and Stabilizing Shampoo using Adam",
+                      ],
+                    }),
+                  ],
+                },
+              }
+            : {},
+      });
+      const paper = await runFinder(new PaperFinder(item, fetcher));
+      assert.deepEqual(paper, {
+        doi: "10.5555/soap-crossref",
+        title: "Published PDF",
+      });
+      const pubmedIndex = calls.findIndex((c) => c.url.includes("esearch"));
+      const crossrefIndex = calls.findIndex((c) =>
+        c.url.includes("api.crossref.org"),
+      );
+      assert.isAbove(
+        crossrefIndex,
+        pubmedIndex,
+        "crossref runs after the earlier sources",
       );
     });
   });
@@ -977,7 +1162,7 @@ describe("paper-finder", function () {
         });
         assert.deepEqual(
           calls.map((c) => c.type),
-          ["text", "json", "json", "json", "text"],
+          ["text", "json", "json", "json", "json", "text"],
         );
       });
 
@@ -1009,11 +1194,11 @@ describe("paper-finder", function () {
           url: "https://arxiv.org/abs/2409.11321",
           title: "v2 PDF",
         });
-        // relatedDOI's text call, the three JSON sources, and arXivPDF's
+        // relatedDOI's text call, the four JSON sources, and arXivPDF's
         // abstract-page fetch all run as part of one resumable pipeline.
         assert.deepEqual(
           calls.map((c) => c.type),
-          ["text", "json", "json", "json", "text"],
+          ["text", "json", "json", "json", "json", "text"],
         );
       });
     });

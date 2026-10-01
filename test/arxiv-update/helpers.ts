@@ -13,6 +13,7 @@ export const UPDATE_SOURCES = [
   "semanticScholar",
   "dblp",
   "pubmed",
+  "crossref",
   "arXiv",
 ] as const;
 
@@ -24,6 +25,7 @@ export function resetUpdateSourcePrefs() {
   // `updateSource.*` also holds credentials, not just toggles; reset them all
   // so no suite has to remember the individual keys (the profile is shared).
   setPluginPref("updateSource.semanticScholar.apiKey", "");
+  setPluginPref("updateSource.crossref.email", "");
 }
 
 /** A preprint item whose URL points at a known preprint server. */
@@ -84,6 +86,24 @@ export function createDBLPFuzzyHit(overrides: Record<string, unknown> = {}) {
       authors: { author: { text: "Nikhil Vyas 0001" } },
       ...overrides,
     },
+  };
+}
+
+// A Crossref work that fuzzy-matches the SOAP fixture preprint below (same
+// first author family "Vyas", same year, an extended title that still scores
+// >= the fuzzy threshold). Mirrors `createDBLPFuzzyHit()`.
+export function createCrossrefFuzzyHit(
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    DOI: "10.5555/soap-crossref",
+    title: [
+      "SOAP: Improving and Stabilizing Shampoo using Adam for Language Modeling",
+    ],
+    author: [{ family: "Vyas", given: "Nikhil" }],
+    issued: { "date-parts": [[2024]] },
+    "container-title": ["Journal of Machine Learning Research"],
+    ...overrides,
   };
 }
 

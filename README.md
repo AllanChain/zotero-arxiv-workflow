@@ -173,8 +173,9 @@ If you have a preprint item and want to find if it has been published in a journ
    2. [Semantic Scholar](https://www.semanticscholar.org) API
    3. [DBLP](https://dblp.org) API
    4. [PubMed](https://pubmed.ncbi.nlm.nih.gov) API
+   5. [Crossref](https://www.crossref.org) API — adding a contact email in the plugin settings is recommended, as Crossref asks API users to identify themselves so it can give them more reliable service (the "polite pool")
 
-   DBLP and PubMed are matched by title, so a paper the publisher renamed can still be found — when it is, the plugin asks you before merging (see below).
+   DBLP, PubMed, and Crossref are matched by title, so a paper the publisher renamed can still be found — when it is, the plugin asks you before merging (see below).
 
 2. If no published version is found, or you tell the plugin that the suggestion was wrong, it then checks [arXiv](https://arxiv.org) for a newer version of your preprint
 

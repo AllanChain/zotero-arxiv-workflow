@@ -33,6 +33,7 @@ update-status =
 review-candidate =
   .dblp = DBLP
   .pubmed = PubMed
+  .crossref = Crossref
 
 review-prompt = 发现模糊匹配。
 
