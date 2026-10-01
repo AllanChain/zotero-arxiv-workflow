@@ -1,10 +1,10 @@
 import PQueue from "p-queue";
 import type { Fetcher } from "@/modules/arxiv-update/fetcher";
-import type { PaperIdentifier } from "@/modules/arxiv-update/paper-finder";
 import {
   UpdateManager,
   type UpdateManagerOptions,
 } from "@/modules/arxiv-update/manager";
+import type { PaperIdentifier } from "@/types";
 import { setPluginPref } from "@test/helpers";
 
 /** Update sources toggleable via the `updateSource.*` prefs. */
@@ -29,11 +29,12 @@ export function resetUpdateSourcePrefs() {
 /** A preprint item whose URL points at a known preprint server. */
 export async function createPreprintItem(
   url = "https://arxiv.org/abs/1234.5678",
-  options: { title?: string; authorLastName?: string } = {},
+  options: { title?: string; authorLastName?: string; date?: string } = {},
 ) {
   const item = new Zotero.Item("preprint");
   item.setField("title", options.title ?? "Test paper");
   item.setField("url", url);
+  if (options.date) item.setField("date", options.date);
   await item.saveTx();
   if (options.authorLastName) {
     item.setCreator(0, {
@@ -66,6 +67,36 @@ export function createFetcher(
     },
   };
   return { fetcher, calls };
+}
+
+// A DBLP hit that fuzzy-matches the SOAP fixture preprint below (same first
+// author "Vyas", same year, an extended title that still scores >= the fuzzy
+// threshold).
+export function createDBLPFuzzyHit(overrides: Record<string, unknown> = {}) {
+  return {
+    info: {
+      key: "conf/iclr/Vyas24",
+      title:
+        "SOAP: Improving and Stabilizing Shampoo using Adam for Language Modeling",
+      venue: "ICLR",
+      year: "2024",
+      doi: "10.5555/soap-example",
+      authors: { author: { text: "Nikhil Vyas 0001" } },
+      ...overrides,
+    },
+  };
+}
+
+/** The SOAP preprint fixture; fuzzy-matches `createDBLPFuzzyHit()`. */
+export async function createSOAPPreprint(
+  url = "https://arxiv.org/abs/2409.11321",
+  options: { date?: string } = {},
+) {
+  return createPreprintItem(url, {
+    title: "SOAP: Improving and Stabilizing Shampoo using Adam",
+    authorLastName: "Vyas",
+    ...(options.date ? { date: options.date } : {}),
+  });
 }
 
 // Offline stand-in for the translator-based import: builds a real journal
