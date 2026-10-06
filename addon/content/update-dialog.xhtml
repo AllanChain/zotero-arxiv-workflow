@@ -4,14 +4,77 @@
 <window
   xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
   xmlns:html="http://www.w3.org/1999/xhtml"
+  width="500"
+  height="300"
   onload="window.arguments[0].loadLock.resolve()"
 >
   <linkset>
     <html:link rel="localization" href="__addonRef__-addon.ftl" />
   </linkset>
   <script src="chrome://zotero/content/include.js" />
-  <vbox>
+  <vbox class="update-root" flex="1">
     <html:h2 data-l10n-id="update-window"></html:h2>
-    <html:div id="__addonRef__-status-container"></html:div>
+    <html:div
+      id="__addonRef__-status-container"
+      class="status-container"
+    ></html:div>
+    <html:div id="__addonRef__-drawer-scrim" class="drawer-scrim"></html:div>
+    <html:aside id="__addonRef__-drawer" class="drawer">
+      <html:header class="drawer-header">
+        <html:span
+          class="drawer-kicker"
+          data-l10n-id="drawer-kicker"
+        ></html:span>
+        <html:button id="__addonRef__-drawer-close" class="drawer-close"
+          >✕</html:button
+        >
+        <html:div
+          id="__addonRef__-drawer-title"
+          class="drawer-title"
+        ></html:div>
+        <html:div
+          id="__addonRef__-drawer-status"
+          class="drawer-status"
+        ></html:div>
+        <html:div
+          id="__addonRef__-drawer-message"
+          class="drawer-message"
+        ></html:div>
+      </html:header>
+      <html:div class="drawer-body">
+        <html:section
+          id="__addonRef__-drawer-candidate"
+          class="drawer-candidate"
+        >
+          <html:div
+            id="__addonRef__-drawer-candidate-title"
+            class="candidate-title"
+          ></html:div>
+          <html:div
+            id="__addonRef__-drawer-candidate-meta"
+            class="candidate-meta"
+          ></html:div>
+          <html:div
+            id="__addonRef__-drawer-candidate-link"
+            class="candidate-link-container"
+          ></html:div>
+        </html:section>
+        <html:div id="__addonRef__-drawer-actions" class="drawer-actions">
+          <html:button
+            id="__addonRef__-drawer-skip"
+            class="drawer-button"
+          ></html:button>
+          <html:button
+            id="__addonRef__-drawer-confirm"
+            class="drawer-button primary"
+          ></html:button>
+        </html:div>
+        <html:hr id="__addonRef__-drawer-divider" class="drawer-divider" />
+        <html:ul
+          id="__addonRef__-drawer-sources"
+          class="drawer-sources"
+        ></html:ul>
+      </html:div>
+    </html:aside>
   </vbox>
 </window>

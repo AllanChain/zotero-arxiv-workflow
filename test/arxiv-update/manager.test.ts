@@ -113,6 +113,52 @@ describe("update-manager", function () {
     assert.equal(after.itemType, "preprint", "item should be left untouched");
   });
 
+  it("records each source's progress on the row", async function () {
+    setPluginPref("downloadJournalPDF", false);
+    const item = await createPreprintItem();
+    const { fetcher } = createFetcher(); // every source misses
+    const { queue, manager } = createUpdateManager({ fetcher });
+
+    manager.createUpdateTasks([item]);
+    await queue.onIdle();
+
+    const row = manager.getRow(item.id)!;
+    // The per-source reporting contract (which keys, in what order) is
+    // paper-finder's; here we only assert every check reaches the row and
+    // every source resolves to a terminal outcome.
+    const sources = Object.values(row.sources ?? {});
+    assert.lengthOf(sources, 6);
+    assert.isTrue(sources.every((source) => source.outcome === "empty"));
+    // A clean miss is not a failure, so the row keeps its bare "No update".
+    assert.isUndefined(row.message);
+  });
+
+  it("surfaces a failed source instead of swallowing it", async function () {
+    setPluginPref("downloadJournalPDF", false);
+    const item = await createPreprintItem();
+    const { fetcher } = createFetcher({
+      fetchText: async () => {
+        throw new Error("network down");
+      },
+      fetchJSON: async () => ({}),
+    });
+    const { queue, manager } = createUpdateManager({ fetcher });
+
+    manager.createUpdateTasks([item]);
+    await queue.onIdle();
+
+    const row = manager.getRow(item.id)!;
+    assert.equal(row.status, "up-to-date");
+    const failed = Object.values(row.sources ?? {}).filter(
+      (source) => source.outcome === "failed",
+    );
+    assert.isAtLeast(failed.length, 1);
+    assert.include(failed[0]?.detail ?? "", "network down");
+    // The failure is surfaced, not swallowed: the row carries the same message
+    // the table cell and the drawer render.
+    assert.equal(row.message, getString("update-message", "sources-failed"));
+  });
+
   it("reports download-error when the journal item cannot be created", async function () {
     setPluginPref("downloadJournalPDF", false);
     const item = await createPreprintItem();
@@ -299,6 +345,34 @@ describe("update-manager", function () {
         url: "https://arxiv.org/abs/2409.11321",
         title: "v2 PDF",
       });
+      // The resumed finder keeps its callback and the row keeps the earlier
+      // entries: arXiv is added once and its running check is replaced by the
+      // found check, not duplicated.
+      const resumesSources = Object.values(row?.sources ?? {});
+      assert.lengthOf(resumesSources, 6);
+      assert.equal(row?.sources?.arXivPDF?.outcome, "found");
+    });
+
+    it("does not report finding-update when importing a confirmed candidate", async function () {
+      setPluginPref("downloadJournalPDF", false);
+      const item = await createSOAPPreprint(undefined, { date: "2024-09-17" });
+      const { fetcher } = fuzzyFetcher();
+      const { queue, manager } = createUpdateManager({ fetcher });
+
+      manager.createUpdateTasks([item]);
+      await queue.onIdle();
+      assert.equal(manager.getRow(item.id)?.status, "needs-confirmation");
+
+      const seen: string[] = [];
+      manager.onChange = () => {
+        const status = manager.getRow(item.id)?.status;
+        if (status) seen.push(status);
+      };
+      await manager.confirm(item.id);
+      await queue.onIdle();
+
+      assert.notInclude(seen, "finding-update");
+      assert.equal(manager.getRow(item.id)?.status, "updated");
     });
 
     it("a waiting confirmation does not block other items", async function () {

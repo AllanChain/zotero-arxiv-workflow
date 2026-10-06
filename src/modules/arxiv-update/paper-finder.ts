@@ -9,9 +9,17 @@ import {
 import {
   FinderIterator,
   PaperIdentifier,
+  SourceCheck,
+  SourceKey,
   TentativePaperIdentifier,
   isTentativePaperIdentifier,
 } from "../../types";
+
+/**
+ * Reports one source's state: `running` before the query, then exactly one of
+ * `found`/`empty`/`failed`. Each call is a complete `SourceCheck`.
+ */
+export type SourceReporter = (check: SourceCheck) => void;
 
 export const KNOWN_PREPRINT_SERVERS = {
   arxiv: "arxiv.org",
@@ -170,7 +178,7 @@ export class PaperFinder {
     }
   }
 
-  async *find(): FinderIterator {
+  async *find(report?: SourceReporter): FinderIterator {
     // Every published-version finder yields its candidates in preference
     // order; find() makes the only decision. A definitive (exact) match is
     // "good enough": it wins immediately, and later sources are never
@@ -178,7 +186,7 @@ export class PaperFinder {
     // *all* sources is held for user confirmation, so e.g. a strong PubMed
     // result beats a weak DBLP one regardless of finder order.
     const publishedFinders: {
-      name: string;
+      name: SourceKey;
       enabled: boolean;
       run: () => Promise<PaperIdentifier[]>;
     }[] = [
@@ -210,25 +218,37 @@ export class PaperFinder {
         run: () => this.crossref(),
       },
     ];
-    // A failing finder must not abort the others. Absence is reported once
-    // per source, but a failure is not an absence: a finder that threw only
-    // logs the failure.
+    const arxivEnabled = getPref("updateSource.arXiv");
+    // A failing finder must not abort the others, and a failure is not an
+    // absence: a finder that threw is surfaced as `failed`. `track` is the
+    // single result→check point, so a source's two states cannot disagree.
+    const track = async <T>(
+      key: SourceKey,
+      run: () => Promise<T>,
+      isFound: (result: T) => boolean,
+    ): Promise<T | undefined> => {
+      report?.({ key, outcome: "running" });
+      try {
+        const result = await run();
+        const found = isFound(result);
+        report?.({ key, outcome: found ? "found" : "empty" });
+        if (!found) ztoolkit.log(`No result from ${key} for "${this.title}"`);
+        return result;
+      } catch (e) {
+        ztoolkit.log(`${key} failed:`, String(e));
+        report?.({ key, outcome: "failed", detail: String(e) });
+        return undefined;
+      }
+    };
     let best: TentativePaperIdentifier | undefined;
     for (const finder of publishedFinders) {
       if (!finder.enabled) continue;
-      let candidates: PaperIdentifier[];
-      try {
-        candidates = await finder.run();
-      } catch (e) {
-        ztoolkit.log(finder.name, "failed:", String(e));
-        continue;
-      }
-      if (candidates.length === 0) {
-        ztoolkit.log(
-          `No published version found on ${finder.name} for "${this.title}"`,
-        );
-        continue;
-      }
+      const candidates = await track(
+        finder.name,
+        finder.run,
+        (found) => found.length > 0,
+      );
+      if (!candidates?.length) continue;
       for (const candidate of candidates) {
         if (isTentativePaperIdentifier(candidate)) {
           if (isBetterCandidate(best, candidate)) best = candidate;
@@ -249,14 +269,10 @@ export class PaperFinder {
     }
     // The arXiv self-update is just another stage in the same pipeline. It
     // only runs after a tentative candidate has been rejected (or when there
-    // was no candidate at all). A failure here is treated as absence.
-    if (getPref("updateSource.arXiv")) {
-      try {
-        const arxivPDF = await this.arXivPDF();
-        if (arxivPDF) return arxivPDF;
-      } catch (e) {
-        ztoolkit.log("arXivPDF failed:", String(e));
-      }
+    // was no candidate at all).
+    if (arxivEnabled) {
+      const arxivPDF = await track("arXivPDF", () => this.arXivPDF(), Boolean);
+      if (arxivPDF) return arxivPDF;
     }
     return undefined;
   }

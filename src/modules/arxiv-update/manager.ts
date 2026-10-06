@@ -7,6 +7,7 @@ import { PaperFinder } from "./paper-finder";
 import {
   FinderIterator,
   PaperIdentifier,
+  SourceCheck,
   TentativePaperIdentifier,
   UpdateStatus,
   UpdateTableData,
@@ -160,16 +161,33 @@ export class UpdateManager {
     this.onChange?.();
   }
 
-  /** The single row mutation path: apply a patch, keep rows sorted, notify. */
+  /**
+   * The single row mutation path: apply a patch, keep rows sorted, notify.
+   * A `sources` patch is merged per source rather than replacing the map, so
+   * one source can be updated without the caller re-reading the row.
+   */
   updateRow(
     id: number,
-    patch: Partial<Pick<UpdateTableData, "status" | "message">>,
+    patch: Partial<Pick<UpdateTableData, "status" | "message" | "sources">>,
   ) {
     const row = this.tableData.find((data) => data.id === id);
     if (!row) return;
-    Object.assign(row, patch);
+    const { sources, ...rest } = patch;
+    Object.assign(row, rest);
+    if (sources) row.sources = { ...row.sources, ...sources };
+    // The sort is stable and keyed on status, so a sources-only patch leaves
+    // the order untouched; sorting unconditionally keeps one mutation path.
     this.sort();
     this.onChange?.();
+  }
+
+  /**
+   * Place one source's progress on the row. A result replaces that source's
+   * own `running` entry; sources not yet run stay absent.
+   */
+  private recordSource(id: number, check: SourceCheck) {
+    const { key, ...state } = check;
+    this.updateRow(id, { sources: { [key]: state } });
   }
 
   /** Drop finished rows when the dialog is reopened; pending confirmations are kept. */
@@ -237,13 +255,18 @@ export class UpdateManager {
   ) {
     ztoolkit.log(`Update task started for "${preprintItem.getDisplayTitle()}"`);
     try {
-      reportProgress("finding-update");
+      // The confirm path imports an already-chosen paper; only a fresh run
+      // "finds". Reporting finding-update here would flash on every confirm.
       if (options.paper) {
         await this.importPaper(preprintItem, options.paper, reportProgress);
         return;
       }
+      reportProgress("finding-update");
       const iterator =
-        options.iterator ?? new PaperFinder(preprintItem, this.fetcher).find();
+        options.iterator ??
+        new PaperFinder(preprintItem, this.fetcher).find((check) =>
+          this.recordSource(preprintItem.id, check),
+        );
       const step = await iterator.next();
       if (!step.done) {
         // The finder paused for confirmation; park the candidate and the
@@ -256,7 +279,10 @@ export class UpdateManager {
         return reportProgress("needs-confirmation");
       }
       if (!step.value) {
-        return reportProgress("up-to-date", options.noPaperMessage);
+        return reportProgress(
+          "up-to-date",
+          options.noPaperMessage ?? this.sourcesFailedMessage(preprintItem.id),
+        );
       }
       await this.importPaper(preprintItem, step.value, reportProgress);
     } catch (err) {
@@ -270,6 +296,17 @@ export class UpdateManager {
             : "Unknown error",
       );
     }
+  }
+
+  /**
+   * "Some sources failed" when the run ended without a paper but a source
+   * errored, so an empty result is not mistaken for a clean miss.
+   */
+  private sourcesFailedMessage(id: number): string | undefined {
+    const failed = Object.values(this.getRow(id)?.sources ?? {}).some(
+      (source) => source.outcome === "failed",
+    );
+    return failed ? getString("update-message", "sources-failed") : undefined;
   }
 
   /** Import, merge, and report progress for a final paper. */

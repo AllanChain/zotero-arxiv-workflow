@@ -6,6 +6,7 @@ import { config } from "@pkg";
 import { arXivUpdate, isUpdateMenuVisible } from "@/modules/arxiv-update";
 import { UpdateManager } from "@/modules/arxiv-update/manager";
 import { UpdateDialog } from "@/modules/arxiv-update/update-dialog";
+import { STATUS_COLOR } from "@/modules/arxiv-update/status";
 import type {
   FinderIterator,
   PaperIdentifier,
@@ -16,7 +17,6 @@ import { getString } from "@/utils/locale";
 import { clearLibrary, getPlugin, setPluginPref } from "@test/helpers";
 import {
   createFetcher,
-  createJournalItem,
   createPreprintItem,
   createUpdateManager,
   getItem,
@@ -24,6 +24,13 @@ import {
 } from "./helpers";
 
 type StatusColumn = Parameters<typeof UpdateDialog.renderStatusCell>[2];
+
+/** Gecko normalizes assigned hex colors to `rgb(...)`; compare in its terms. */
+function toRgb(hex: string): string {
+  const el = Zotero.getMainWindow().document.createElement("span");
+  el.style.color = hex;
+  return el.style.color;
+}
 
 describe("update-dialog", function () {
   this.timeout(60000);
@@ -40,19 +47,19 @@ describe("update-dialog", function () {
   afterEach(async function () {
     setPluginPref("downloadJournalPDF", true);
     resetUpdateSourcePrefs();
-    // Close any candidate-confirm dialogs opened during the test and clear
-    // the guard, so a stale dialog cannot leak into the next test.
-    for (const dialog of findCandidateDialogs()) {
-      dialog.close();
-    }
-    UpdateDialog.openCandidateDialog = undefined;
     // Close any dialog opened during the test and reset its statics. Fake
     // windows used to stub rendering have no `close`; guard the call.
-    if (UpdateDialog.window && !UpdateDialog.window.closed) {
-      UpdateDialog.window.close?.();
+    if (UpdateDialog.window) {
+      try {
+        UpdateDialog.drawer?.close();
+      } catch {
+        // Detached fake document; nothing to clear.
+      }
+      if (!UpdateDialog.window.closed) UpdateDialog.window.close?.();
     }
     UpdateDialog.window = undefined;
     UpdateDialog.tableHelper = undefined;
+    UpdateDialog.drawer = undefined;
     addon.data.arXivUpdate.manager = originalManager;
     await clearLibrary();
   });
@@ -151,41 +158,40 @@ describe("update-dialog", function () {
     manager: UpdateManager,
     id: number,
     title: string,
-    source: "DBLP" | "PubMed" = "DBLP",
-    candidateTitle?: string,
-    url?: string | null, // `null` explicitly means "no review link"
-    fallback?: PaperIdentifier, // returned if the user skips the candidate
+    options: {
+      source?: "DBLP" | "PubMed";
+      candidateTitle?: string;
+      /** Omit for the source's default review link; pass "" for none. */
+      url?: string;
+    } = {},
   ): UpdateTableData {
+    const source = options.source ?? "DBLP";
     const paper: TentativePaperIdentifier = {
       doi: `10.5555/example-doi-${id}`,
       title: "Published PDF",
       tentative: true,
       candidate: {
         source,
-        candidateTitle: candidateTitle ?? `${title} (Published Version)`,
+        candidateTitle:
+          options.candidateTitle ?? `${title} (Published Version)`,
         publication: source === "DBLP" ? "ICLR" : "Some Journal",
         year: "2024",
         score: 0.9,
         url:
-          url === null
-            ? undefined
-            : (url ??
-              (source === "DBLP"
-                ? `https://dblp.org/rec/conf/iclr/example-${id}.html`
-                : `https://pubmed.ncbi.nlm.nih.gov/30000000${id}/`)),
+          options.url ??
+          (source === "DBLP"
+            ? `https://dblp.org/rec/conf/iclr/example-${id}.html`
+            : `https://pubmed.ncbi.nlm.nih.gov/30000000${id}/`),
       },
     };
-    // This fake pipeline is already paused at the confirmation point. A
-    // confirmation never resumes it (the approved candidate is imported
-    // directly), so the next call — from skip — supplies the fallback.
-    let resumed = false;
+    // This fake pipeline is already paused at the confirmation point; a
+    // resumed run (skip) finds no further paper, matching the real finder
+    // when the only candidate was the one just rejected.
     const iterator = {
       async next(): Promise<
         IteratorResult<never, PaperIdentifier | undefined>
       > {
-        if (resumed) return { done: true, value: undefined };
-        resumed = true;
-        return { done: true, value: fallback };
+        return { done: true, value: undefined };
       },
       async return(): Promise<
         IteratorResult<never, PaperIdentifier | undefined>
@@ -213,44 +219,6 @@ describe("update-dialog", function () {
     };
   }
 
-  // Find open candidate-confirm windows. With `requireFilled`, only windows
-  // whose title line has been rendered count.
-  function findCandidateDialogs(requireFilled = false): WindowProxy[] {
-    const wm = Services.wm;
-    const enumerator = wm.getEnumerator("");
-    const dialogs: WindowProxy[] = [];
-    while (enumerator.hasMoreElements()) {
-      const w = enumerator.getNext() as unknown as WindowProxy;
-      if (w.closed) continue;
-      const title = w.document?.getElementById(
-        `${config.addonRef}-preprint-title`,
-      );
-      if (title && (!requireFilled || title.hasChildNodes())) {
-        dialogs.push(w);
-      }
-    }
-    return dialogs;
-  }
-
-  // Wait for the candidate-confirm dialog to be open and filled with content.
-  async function waitForCandidateDialog(): Promise<WindowProxy> {
-    return new Promise((resolve, reject) => {
-      const deadline = Date.now() + 15000;
-      const timer = setInterval(() => {
-        const dialogs = findCandidateDialogs(true);
-        if (dialogs.length > 0) {
-          clearInterval(timer);
-          resolve(dialogs[0]!);
-          return;
-        }
-        if (Date.now() > deadline) {
-          clearInterval(timer);
-          reject(new Error("candidate dialog never rendered"));
-        }
-      }, 100);
-    });
-  }
-
   async function waitForCondition(
     description: string,
     condition: () => boolean,
@@ -270,28 +238,32 @@ describe("update-dialog", function () {
     });
   }
 
-  function dialogButton(
-    dialog: WindowProxy,
-    type: "accept" | "extra1",
-  ): { label: string; click(): void } {
+  // The virtualized table's selection API is the seam the drawer reacts to.
+  function tableSelection() {
     return (
-      dialog.document.documentElement as unknown as {
-        getButton(type: string): { label: string; click(): void };
+      UpdateDialog.tableHelper as unknown as {
+        treeInstance: {
+          selection: {
+            select(index: number): void;
+            clearSelection(): void;
+          };
+        };
       }
-    ).getButton(type);
+    ).treeInstance.selection;
   }
 
-  async function clickLinkAndWait(
-    win: WindowProxy,
-    rowIndex = 0,
-  ): Promise<WindowProxy> {
-    const link = win.document.querySelectorAll<HTMLElement>(
-      `#${config.addonRef}-status-table .row .cell.clickable .candidate-link`,
-    )[rowIndex]!;
-    link.dispatchEvent(
-      new win.MouseEvent("click", { bubbles: true, cancelable: true }),
-    );
-    return waitForCandidateDialog();
+  function drawerDocument(): Document {
+    return UpdateDialog.window!.document;
+  }
+
+  function drawerWindow(): Window {
+    return UpdateDialog.window as unknown as Window;
+  }
+
+  function drawerEl(suffix: string): HTMLElement | null {
+    return drawerDocument().getElementById(
+      `${config.addonRef}-${suffix}`,
+    ) as HTMLElement | null;
   }
 
   describe("isUpdateMenuVisible", function () {
@@ -410,76 +382,10 @@ describe("update-dialog", function () {
       } as StatusColumn);
       assert.equal(cell?.className, "cell status");
       const swatch = cell?.querySelector(".tag-swatch") as HTMLElement | null;
-      // Gecko serializes the assigned hex color back as rgb().
-      assert.equal(swatch?.style.color, "rgb(95, 178, 54)");
+      assert.equal(swatch?.style.color, toRgb(STATUS_COLOR.updated));
       const text = cell?.querySelector(".status-message") as HTMLElement | null;
       // The emoji circle is stripped but the following space is kept.
       assert.equal(text?.innerText, " Updated: done");
-    });
-
-    it("opens the dialog for the row it was rendered from, even after a re-sort", async function () {
-      const { manager } = testManager();
-      useManager(manager);
-      const first = await createPreprintItem(
-        "https://arxiv.org/abs/2409.11321",
-        {
-          title: "First Paper",
-        },
-      );
-      const second = await createPreprintItem(
-        "https://arxiv.org/abs/2409.11322",
-        { title: "Second Paper" },
-      );
-      manager
-        .getRows()
-        .push(
-          candidate(manager, first.id, first.getDisplayTitle()),
-          candidate(manager, second.id, second.getDisplayTitle()),
-        );
-      UpdateDialog.window = {
-        document: Zotero.getMainWindow().document,
-      } as unknown as WindowProxy;
-
-      // Render the cell for index 1 ("Second Paper"). Then a row that errored
-      // sorts itself to the front, so index 1 now names a different row: the
-      // click must still resolve the row the cell was rendered from.
-      const cell = UpdateDialog.renderStatusCell(1, "", {
-        className: "status",
-      } as StatusColumn) as HTMLElement;
-      assert.equal(manager.getRows()[1]?.id, second.id);
-      manager.getRows().push({
-        id: second.id + 100000,
-        title: "Errored Paper",
-        status: "general-error",
-      });
-      manager.updateRow(first.id, { status: "needs-confirmation" });
-      assert.equal(
-        manager.getRows()[1]?.id,
-        first.id,
-        "the re-sort should have moved the rendered row off index 1",
-      );
-
-      const opened: number[] = [];
-      const confirmCandidate = UpdateDialog.confirmCandidateWithDialog;
-      UpdateDialog.confirmCandidateWithDialog = async (id: number) => {
-        opened.push(id);
-      };
-      try {
-        const link = cell.querySelector<HTMLElement>(".candidate-link")!;
-        link.dispatchEvent(
-          new (Zotero.getMainWindow() as unknown as Window).MouseEvent(
-            "click",
-            { bubbles: true, cancelable: true },
-          ),
-        );
-      } finally {
-        UpdateDialog.confirmCandidateWithDialog = confirmCandidate;
-      }
-      assert.deepEqual(
-        opened,
-        [second.id],
-        "the click must open the dialog of the row it was rendered for",
-      );
     });
   });
 
@@ -492,7 +398,6 @@ describe("update-dialog", function () {
       let invalidated = 0;
       UpdateDialog.window = {
         closed: false,
-        sizeToContentConstrained: () => {},
       } as unknown as WindowProxy;
       UpdateDialog.tableHelper = {
         treeInstance: { invalidate: () => invalidated++ },
@@ -555,6 +460,19 @@ describe("update-dialog", function () {
       arXivUpdate.update([item]);
       const win = await waitForDialogRows(1);
       assert.isDefined(win);
+      // The window is sized declaratively (width/height on <window>); this
+      // guards against reintroducing the JS sizeToContent workaround or a
+      // content-shrinking dialog that would drag the drawer with it.
+      await Zotero.Promise.delay(300);
+      const sizeRoot = win.document.querySelector(
+        ".update-root",
+      ) as HTMLElement;
+      assert.equal(win.innerHeight, 300, "dialog opens at the declared height");
+      assert.equal(
+        sizeRoot.clientHeight,
+        win.innerHeight,
+        "the content root fills the dialog",
+      );
       const rows = win.document.querySelectorAll(
         `#${config.addonRef}-status-table .row`,
       );
@@ -579,11 +497,10 @@ describe("update-dialog", function () {
         getString("update-status", "updated"),
       );
 
+      // The pipeline's merge/DOI outcome is covered in manager.test.ts; here
+      // the contract is that the dialog renders the final status.
       assert.lengthOf(calls, 1, "only the arXiv abstract page is fetched");
       assert.equal(manager.getRows()[0].status, "updated");
-      const merged = await getItem(item.id);
-      assert.equal(merged.itemType, "journalArticle");
-      assert.equal(merged.getField("DOI"), "10.1000/published");
       win.close();
     });
 
@@ -600,13 +517,11 @@ describe("update-dialog", function () {
       );
 
       assert.equal(manager.getRows()[0].status, "up-to-date");
-      const after = await getItem(item.id);
-      assert.equal(after.itemType, "preprint", "item should be left untouched");
       win.close();
     });
   });
 
-  describe("candidate confirmation dialog", function () {
+  describe("detail drawer", function () {
     // A manager whose confirm/skip really executes (imports + merges) but
     // whose finder is never consulted: the rows below are pushed directly.
     function reviewManager(
@@ -623,7 +538,18 @@ describe("update-dialog", function () {
       return manager;
     }
 
-    it("click-to-check opens the dialog and confirm triggers the merge", async function () {
+    function isDrawerOpen(): boolean {
+      return drawerEl("drawer")?.style.display === "flex";
+    }
+
+    function pressKey(key: string) {
+      const win = UpdateDialog.window as unknown as Window;
+      win.dispatchEvent(
+        new win.KeyboardEvent("keydown", { key, bubbles: true }),
+      );
+    }
+
+    it("selection opens the drawer and confirm merges the candidate", async function () {
       setPluginPref("downloadJournalPDF", false);
       const item = await createPreprintItem(
         "https://arxiv.org/abs/2409.11321",
@@ -633,84 +559,46 @@ describe("update-dialog", function () {
       );
       const candidateURL = "https://openreview.net/forum?id=example123";
       const manager = reviewManager();
-      manager
-        .getRows()
-        .push(
-          candidate(
-            manager,
-            item.id,
-            item.getDisplayTitle(),
-            "DBLP",
-            "The Lazy Brown Dog",
-            candidateURL,
-          ),
-        );
+      manager.getRows().push(
+        candidate(manager, item.id, item.getDisplayTitle(), {
+          source: "DBLP",
+          candidateTitle: "The Lazy Brown Dog",
+          url: candidateURL,
+        }),
+      );
 
       await UpdateDialog.open();
-      const win = await waitForDialogRows(1);
-      const statusCell = win.document.querySelector(
-        `#${config.addonRef}-status-table .row .cell.clickable`,
-      )!;
-      assert.ok(
-        statusCell.classList.contains("status-cell"),
-        "status cell should use the regular status layout",
-      );
-      assert.ok(
-        statusCell.textContent?.includes(getString("review-prompt")),
-        "status cell should show the fuzzy-match prompt",
-      );
-      const link = statusCell.querySelector<HTMLElement>(".candidate-link")!;
+      await waitForDialogRows(1);
+      tableSelection().select(0);
+
+      assert.isTrue(isDrawerOpen(), "the drawer should open on selection");
       assert.equal(
-        link.textContent,
-        getString("review-action", "click-to-check"),
+        drawerEl("drawer-title")?.textContent,
+        item.getDisplayTitle(),
+      );
+      assert.include(
+        drawerEl("drawer-status")?.textContent ?? "",
+        getString("update-status", "needs-confirmation"),
       );
 
-      link.dispatchEvent(
-        new win.MouseEvent("click", { bubbles: true, cancelable: true }),
-      );
-      const dialog = await waitForCandidateDialog();
-
-      // The dialog shows the word-level diff between the two titles.
-      const preprintTitle = dialog.document.getElementById(
-        `${config.addonRef}-preprint-title`,
-      )!;
-      const removed = preprintTitle.querySelectorAll("b");
-      assert.ok(
-        removed.length > 0,
-        "preprint line should highlight preprint-only words",
-      );
-      for (const b of removed) {
-        assert.equal((b as HTMLElement).style.color, "var(--accent-red)");
-      }
-      const candidateTitle = dialog.document.getElementById(
-        `${config.addonRef}-candidate-title`,
-      )!;
+      // The candidate title highlights only words the candidate adds.
+      const candidateTitle = drawerEl("drawer-candidate-title")!;
       const added = candidateTitle.querySelectorAll("b");
       assert.ok(
         added.length > 0,
-        "candidate line should highlight candidate-only words",
+        "candidate line should highlight added words",
       );
       for (const b of added) {
         assert.equal((b as HTMLElement).style.color, "var(--accent-green)");
       }
-      const meta = dialog.document.getElementById(
-        `${config.addonRef}-candidate-meta`,
-      )!;
-      assert.ok(
-        meta.textContent?.includes("DBLP"),
-        "meta should show the source",
-      );
-      assert.ok(
-        meta.textContent?.includes("ICLR"),
-        "meta should show the publication title",
-      );
+      const meta = drawerEl("drawer-candidate-meta")!;
+      assert.include(meta.textContent ?? "", "DBLP");
+      assert.include(meta.textContent ?? "", "ICLR");
 
-      const linkContainer = dialog.document.getElementById(
-        `${config.addonRef}-candidate-link`,
-      )!;
-      const viewLink =
-        linkContainer.querySelector<HTMLAnchorElement>("a.candidate-link")!;
-      assert.ok(viewLink, "dialog should render the candidate review link");
+      const viewLink = drawerEl(
+        "drawer-candidate-link",
+      )!.querySelector<HTMLAnchorElement>("a.candidate-link")!;
+      assert.ok(viewLink, "drawer should render the candidate review link");
       assert.equal(
         viewLink.textContent,
         getString("review-action", "view-candidate"),
@@ -722,7 +610,10 @@ describe("update-dialog", function () {
       Zotero.launchURL = (url: string) => void openedURLs.push(url);
       try {
         viewLink.dispatchEvent(
-          new dialog.MouseEvent("click", { bubbles: true, cancelable: true }),
+          new (drawerWindow().MouseEvent)("click", {
+            bubbles: true,
+            cancelable: true,
+          }),
         );
       } finally {
         Zotero.launchURL = originalLaunchURL;
@@ -730,30 +621,93 @@ describe("update-dialog", function () {
       assert.deepEqual(openedURLs, [candidateURL]);
 
       assert.equal(
-        dialogButton(dialog, "accept").label,
-        getString("candidate-confirm-dialog", "buttonlabelaccept"),
+        drawerEl("drawer-confirm")?.textContent,
+        getString("review-action", "confirm"),
       );
       assert.equal(
-        dialogButton(dialog, "extra1").label,
-        getString("candidate-confirm-dialog", "buttonlabelextra1"),
+        drawerEl("drawer-skip")?.textContent,
+        getString("review-action", "skip"),
       );
 
-      dialogButton(dialog, "accept").click();
+      drawerEl("drawer-confirm")!.click();
       await waitForCondition(
         "row to reach updated status",
         () => manager.getRow(item.id)?.status === "updated",
       );
 
-      assert.equal(manager.getRow(item.id)?.status, "updated");
       assert.isUndefined(manager.getPendingPaper(item.id));
       const merged = await getItem(item.id);
       assert.equal(merged.itemType, "journalArticle");
       assert.equal(merged.getField("DOI"), `10.5555/example-doi-${item.id}`);
     });
 
-    it("dialog without a candidate URL hides the review link", async function () {
+    it("renders a status swatch and one labeled row per source outcome", async function () {
       setPluginPref("downloadJournalPDF", false);
-      setPluginPref("updateSource.arXiv", false);
+      const item = await createPreprintItem(
+        "https://arxiv.org/abs/2409.11321",
+        { title: "Sourced Paper" },
+      );
+      const manager = reviewManager();
+      const sources = {
+        relatedDOI: { outcome: "empty" },
+        dblp: { outcome: "found" },
+        pubMed: { outcome: "running" },
+        crossref: { outcome: "empty" },
+        arXivPDF: { outcome: "failed", detail: "network down" },
+      } as const;
+      manager.getRows().push({
+        id: item.id,
+        title: item.getDisplayTitle(),
+        status: "finding-update",
+        sources: { ...sources },
+      });
+
+      await UpdateDialog.open();
+      await waitForDialogRows(1);
+      tableSelection().select(0);
+
+      // The status line uses the table cell's swatch, not a font-dependent
+      // emoji.
+      const statusSwatch = drawerEl("drawer-status")?.querySelector(
+        ".tag-swatch",
+      ) as HTMLElement | null;
+      assert.ok(statusSwatch, "status line should carry a swatch");
+      assert.equal(statusSwatch!.style.color, toRgb(STATUS_COLOR.processing));
+
+      // Each source row shows its localized name and outcome; the failed row
+      // also shows why it failed. Class names are an implementation detail of
+      // the icon and not asserted here.
+      const orderedKeys = [
+        "relatedDOI",
+        "dblp",
+        "pubMed",
+        "crossref",
+        "arXivPDF",
+      ] as const;
+      const items = Array.from(
+        drawerEl("drawer-sources")!.querySelectorAll(".drawer-source"),
+      );
+      assert.lengthOf(items, orderedKeys.length);
+      orderedKeys.forEach((key, index) => {
+        const item = items[index]!;
+        assert.equal(
+          item.querySelector(".source-name")?.textContent,
+          getString("source-name", key),
+        );
+        assert.equal(
+          item.querySelector(".source-outcome")?.textContent,
+          getString("source-outcome", sources[key].outcome),
+        );
+      });
+      assert.equal(
+        items[4]!.querySelector(".source-detail")?.textContent,
+        "network down",
+        "a failed source shows its failure detail",
+      );
+    });
+
+    it("candidate without a URL hides the review link", async function () {
+      setPluginPref("downloadJournalPDF", false);
       const item = await createPreprintItem(
         "https://arxiv.org/abs/2409.11321",
         {
@@ -761,45 +715,30 @@ describe("update-dialog", function () {
         },
       );
       const manager = reviewManager();
-      manager
-        .getRows()
-        .push(
-          candidate(
-            manager,
-            item.id,
-            item.getDisplayTitle(),
-            "PubMed",
-            "Some Title",
-            null,
-          ),
-        );
+      manager.getRows().push(
+        candidate(manager, item.id, item.getDisplayTitle(), {
+          source: "PubMed",
+          candidateTitle: "Some Title",
+          url: "",
+        }),
+      );
 
       await UpdateDialog.open();
-      const win = await waitForDialogRows(1);
-      const dialog = await clickLinkAndWait(win);
+      await waitForDialogRows(1);
+      tableSelection().select(0);
 
-      const linkContainer = dialog.document.getElementById(
-        `${config.addonRef}-candidate-link`,
-      )!;
       assert.equal(
-        linkContainer.style.display,
+        drawerEl("drawer-candidate-link")?.style.display,
         "none",
         "link line should be hidden without a candidate URL",
       );
       assert.equal(
-        linkContainer.querySelector("a.candidate-link"),
+        drawerEl("drawer-candidate-link")?.querySelector("a.candidate-link"),
         null,
-        "no link should be rendered without a candidate URL",
-      );
-
-      dialogButton(dialog, "extra1").click();
-      await waitForCondition(
-        "row to become up-to-date",
-        () => manager.getRow(item.id)?.status === "up-to-date",
       );
     });
 
-    it("skip button in the dialog marks the row up-to-date", async function () {
+    it("skip marks the row up-to-date", async function () {
       setPluginPref("downloadJournalPDF", false);
       setPluginPref("updateSource.arXiv", false);
       const item = await createPreprintItem(
@@ -814,10 +753,10 @@ describe("update-dialog", function () {
         .push(candidate(manager, item.id, item.getDisplayTitle()));
 
       await UpdateDialog.open();
-      const win = await waitForDialogRows(1);
-      const dialog = await clickLinkAndWait(win);
+      await waitForDialogRows(1);
+      tableSelection().select(0);
+      drawerEl("drawer-skip")!.click();
 
-      dialogButton(dialog, "extra1").click();
       await waitForCondition(
         "row to become up-to-date",
         () => manager.getRow(item.id)?.status === "up-to-date",
@@ -825,61 +764,12 @@ describe("update-dialog", function () {
       assert.isUndefined(manager.getPendingPaper(item.id));
     });
 
-    it("skipping runs the arXiv self-update fallback when enabled", async function () {
-      setPluginPref("downloadJournalPDF", false);
-      setPluginPref("updateSource.arXiv", true);
-      const item = await createPreprintItem(
-        "https://arxiv.org/abs/2409.11321",
-        {
-          title: "Paper Number Seven",
-        },
-      );
-      let located: PaperIdentifier | undefined;
-      const manager = reviewManager({
-        fetcher: createFetcher({
-          fetchText: async () => "<html><strong>[v2]</strong></html>",
-        }).fetcher,
-        createItem: async (paper) => {
-          located = paper;
-          return createJournalItem(paper);
-        },
-      });
-      manager.getRows().push(
-        candidate(
-          manager,
-          item.id,
-          item.getDisplayTitle(),
-          "DBLP",
-          undefined,
-          undefined,
-          {
-            url: "https://arxiv.org/abs/2409.11321",
-            title: "v2 PDF",
-          },
-        ),
-      );
-
-      await UpdateDialog.open();
-      const win = await waitForDialogRows(1);
-      const dialog = await clickLinkAndWait(win);
-      dialogButton(dialog, "extra1").click();
-
-      await waitForCondition(
-        "row to reach updated status via arXiv self-update",
-        () => manager.getRow(item.id)?.status === "updated",
-      );
-      assert.deepEqual(located, {
-        url: "https://arxiv.org/abs/2409.11321",
-        title: "v2 PDF",
-      });
-    });
-
-    it("closing the confirmation dialog leaves the row pending", async function () {
+    it("an empty selection closes the drawer", async function () {
       setPluginPref("downloadJournalPDF", false);
       const item = await createPreprintItem(
         "https://arxiv.org/abs/2409.11321",
         {
-          title: "Paper Number Three",
+          title: "Paper Number Eight",
         },
       );
       const manager = reviewManager();
@@ -888,30 +778,28 @@ describe("update-dialog", function () {
         .push(candidate(manager, item.id, item.getDisplayTitle()));
 
       await UpdateDialog.open();
-      const win = await waitForDialogRows(1);
-      const dialog = await clickLinkAndWait(win);
+      await waitForDialogRows(1);
+      tableSelection().select(0);
+      assert.isTrue(isDrawerOpen());
 
-      dialog.close();
-      await Zotero.Promise.delay(300);
-
-      const data = manager.getRow(item.id);
+      tableSelection().clearSelection();
+      assert.isFalse(
+        isDrawerOpen(),
+        "clearing the selection closes the drawer",
+      );
       assert.equal(
-        data?.status,
+        manager.getRow(item.id)?.status,
         "needs-confirmation",
-        "closing the dialog should keep the row pending",
-      );
-      assert.ok(
-        manager.getPendingPaper(item.id),
-        "pending paper should be retained",
+        "closing the drawer leaves the row pending",
       );
     });
 
-    it("double-clicking the link opens only one dialog", async function () {
+    it("Escape closes the drawer and leaves the row pending", async function () {
       setPluginPref("downloadJournalPDF", false);
       const item = await createPreprintItem(
         "https://arxiv.org/abs/2409.11321",
         {
-          title: "Paper Number Four",
+          title: "Paper Number Nine",
         },
       );
       const manager = reviewManager();
@@ -920,62 +808,74 @@ describe("update-dialog", function () {
         .push(candidate(manager, item.id, item.getDisplayTitle()));
 
       await UpdateDialog.open();
-      const win = await waitForDialogRows(1);
-      const link = win.document.querySelector<HTMLElement>(
-        `#${config.addonRef}-status-table .row .cell.clickable .candidate-link`,
-      )!;
-      // Click again once the first dialog has loaded, so a stale unload during
-      // the initial document load would have already cleared the guard.
-      link.dispatchEvent(
-        new win.MouseEvent("click", { bubbles: true, cancelable: true }),
-      );
-      const firstDialog = await waitForCandidateDialog();
-      link.dispatchEvent(
-        new win.MouseEvent("click", { bubbles: true, cancelable: true }),
-      );
-      await Zotero.Promise.delay(300);
+      await waitForDialogRows(1);
+      tableSelection().select(0);
+      assert.isTrue(isDrawerOpen());
 
+      pressKey("Escape");
+      assert.isFalse(isDrawerOpen());
+      assert.equal(manager.getRow(item.id)?.status, "needs-confirmation");
+    });
+
+    it("a re-sort while the drawer is open keeps it on the same row", async function () {
+      setPluginPref("downloadJournalPDF", false);
+      const selected = await createPreprintItem(
+        "https://arxiv.org/abs/2409.11321",
+        { title: "Selected Paper" },
+      );
+      const other = await createPreprintItem(
+        "https://arxiv.org/abs/2409.11322",
+        { title: "Other Paper" },
+      );
+      const manager = reviewManager();
+      manager
+        .getRows()
+        .push(
+          candidate(manager, other.id, other.getDisplayTitle()),
+          candidate(manager, selected.id, selected.getDisplayTitle()),
+        );
+
+      await UpdateDialog.open();
+      await waitForDialogRows(2);
+      tableSelection().select(1);
       assert.equal(
-        findCandidateDialogs().length,
-        1,
-        "double-click should leave only one dialog open",
+        drawerEl("drawer-title")?.textContent,
+        selected.getDisplayTitle(),
       );
-      assert.ok(
-        firstDialog.closed,
-        "the second click should replace the first dialog",
+      assert.equal(manager.getRows()[1]?.id, selected.id);
+
+      // An errored row sorts to the front, so index 1 now names another row;
+      // the drawer must keep rendering (and confirming) the captured id.
+      manager.getRows().push({
+        id: selected.id + 100000,
+        title: "Errored Paper",
+        status: "general-error",
+      });
+      manager.updateRow(selected.id, { status: "needs-confirmation" });
+      assert.equal(
+        manager.getRows()[1]?.id,
+        other.id,
+        "the re-sort should have moved the selected row off index 1",
+      );
+      assert.equal(
+        drawerEl("drawer-title")?.textContent,
+        selected.getDisplayTitle(),
+        "the drawer stays bound to its captured row id",
+      );
+
+      drawerEl("drawer-confirm")!.click();
+      await waitForCondition(
+        "the captured row to reach updated status",
+        () => manager.getRow(selected.id)?.status === "updated",
+      );
+      assert.equal(
+        manager.getRow(other.id)?.status,
+        "needs-confirmation",
+        "the other row must remain untouched",
       );
     });
 
-    it("a dialog that already closed does not block the next confirmation", async function () {
-      setPluginPref("downloadJournalPDF", false);
-      const item = await createPreprintItem(
-        "https://arxiv.org/abs/2409.11321",
-        {
-          title: "Paper Number Six",
-        },
-      );
-      const manager = reviewManager();
-      manager
-        .getRows()
-        .push(candidate(manager, item.id, item.getDisplayTitle()));
-
-      await UpdateDialog.open();
-      const win = await waitForDialogRows(1);
-      // The static keeps pointing at the previous dialog after it closes; only
-      // its `closed` flag says it is gone. A click must still work.
-      UpdateDialog.openCandidateDialog = {
-        closed: true,
-      } as unknown as WindowProxy;
-
-      const dialog = await clickLinkAndWait(win);
-      assert.ok(
-        !dialog.closed,
-        "a stale reference must not lock the confirmation feature",
-      );
-      dialog.close();
-    });
-
-    it("window close keeps pending candidates", async function () {
+    it("window close tears down the drawer and keeps pending candidates", async function () {
       setPluginPref("downloadJournalPDF", false);
       const item = await createPreprintItem(
         "https://arxiv.org/abs/2409.11321",
@@ -989,20 +889,28 @@ describe("update-dialog", function () {
         .push(candidate(manager, item.id, item.getDisplayTitle()));
 
       await UpdateDialog.open();
-      const win = await waitForDialogRows(1);
-      win.close();
+      await waitForDialogRows(1);
+      tableSelection().select(0);
+      assert.ok(UpdateDialog.drawer?.isOpen());
+
+      UpdateDialog.window!.close();
       await Zotero.Promise.delay(300);
 
-      const data = manager.getRow(item.id);
       assert.equal(
-        data?.status,
+        manager.getRow(item.id)?.status,
         "needs-confirmation",
         "closing the window should keep the pending candidate",
       );
-      assert.ok(
-        manager.getPendingPaper(item.id),
-        "pending paper should be retained",
+      assert.ok(manager.getPendingPaper(item.id));
+      // The manager queue outlives the window: the drawer and the row-change
+      // hook must be torn down so a late task cannot touch the dead window.
+      assert.isUndefined(UpdateDialog.drawer, "the drawer must be torn down");
+      assert.isUndefined(
+        manager.onChange,
+        "the row-change hook must be dropped",
       );
+      // A mutation after close must be a no-op, not a repaint of a dead window.
+      manager.updateRow(item.id, { status: "needs-confirmation" });
     });
   });
 });

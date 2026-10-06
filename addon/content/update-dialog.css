@@ -1,8 +1,26 @@
-vbox {
+/* The dialog root is the overlay's positioning context, so the scrim and
+   drawer span the whole dialog rather than a table wrapper. The 1em gutter is
+   padding, not margin: absolutely positioned children cover the padding box,
+   so the overlay reaches the dialog edges while the content stays inset. */
+.update-root {
+  position: relative;
   height: 100%;
-  overflow-y: scroll;
-  margin-left: 1em;
-  margin-right: 1em;
+  padding-left: 1em;
+  padding-right: 1em;
+}
+
+/* Matches Zotero's groupbox heading sizing (zotero.css). */
+.update-root > h2 {
+  font-size: 14px;
+  margin-top: 1em;
+  margin-bottom: 0.3em;
+}
+
+/* The table fills the space below the dialog heading; the virtualized table
+   scrolls internally when it overflows. */
+.status-container {
+  flex: 1;
+  min-height: 0;
 }
 
 .tag-swatch {
@@ -21,15 +39,225 @@ vbox {
 }
 
 .candidate-link {
-  color: var(--accent-blue, #4d8fe6);
+  color: var(--accent-blue);
   text-decoration: underline;
   cursor: pointer;
 }
 
-/* Zotero styles `.cell.clickable` as a centered button cell; the status
-   cell is a regular status row with an inline link, so keep the standard
-   cell layout. */
-.virtualized-table .cell.clickable.status-cell {
+/* Modal scrim: dims the dialog and swallows clicks and wheel events while the
+   drawer is open. Uses the same dimming as Zotero's pane overlay. */
+.drawer-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 20;
+  display: none;
+}
+
+/* Right-hand drawer, styled after Zotero's side panes: the pane material
+   background, a pane divider on the inner edge, and no drop shadow. Chrome
+   windows make text non-selectable by default, so opt the drawer's content
+   (notably failure details) into selection, matching Zotero's error panels. */
+.drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  width: 300px;
+  display: none;
+  flex-direction: column;
+  background: var(--material-sidepane);
+  color: var(--fill-primary);
+  border-inline-start: var(--material-panedivider);
+  -moz-user-select: text;
+  user-select: text;
+  cursor: text;
+  z-index: 21;
+}
+
+/* Zotero's item-pane header sizing. */
+.drawer-header {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 8px;
+  border-bottom: 1px solid var(--fill-quinary);
+}
+
+/* Section-title styling from the item pane (collapsible-section .title). */
+.drawer-kicker {
   display: block;
-  padding: 0 8px;
+  color: var(--fill-secondary);
+  font-weight: 600;
+}
+
+/* Zotero's icon-button treatment (item-pane-sidenav .btn). */
+.drawer-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fill-secondary);
+  -moz-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+.drawer-close:hover {
+  background-color: var(--fill-quinary);
+}
+
+.drawer-close:active {
+  background-color: var(--fill-quarternary);
+}
+
+/* Matches the item-pane title (font-weight 600, line-height 1.333). */
+.drawer-title {
+  margin-top: 2px;
+  font-weight: 600;
+  line-height: 1.333;
+  overflow-wrap: anywhere;
+}
+
+.drawer-status {
+  margin-top: 4px;
+}
+
+.drawer-message {
+  margin-top: 2px;
+}
+
+/* The drawer body scrolls on its own; the header stays put. */
+.drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.drawer-candidate {
+  margin-bottom: 8px;
+}
+
+.candidate-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.candidate-meta {
+  margin-top: 2px;
+  color: var(--fill-secondary);
+}
+
+.candidate-link-container {
+  margin-top: 4px;
+}
+
+.drawer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+/* Zotero styles plain buttons per platform (scss/components/_button.scss):
+   the flat GTK shape is Linux-only; elsewhere the native button is kept.
+   Mirror that instead of forcing the Linux look on every platform. */
+.drawer-button {
+  margin: 0;
+  padding-inline: 12px;
+  -moz-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+@media (-moz-platform: linux) {
+  .drawer-button {
+    appearance: none;
+    border: 1px solid ThreeDShadow;
+    border-radius: 5px;
+  }
+}
+
+/* The primary action is a flat accent button on every platform, so it opts
+   out of the native appearance itself. */
+.drawer-button.primary {
+  appearance: none;
+  border: 1px solid transparent;
+  background-color: var(--accent-blue);
+  color: var(--accent-white);
+}
+
+.drawer-button.primary:hover {
+  background-color: color-mix(in srgb, var(--accent-blue) 90%, black);
+}
+
+.drawer-button.primary:active {
+  background-color: color-mix(in srgb, var(--accent-blue) 80%, black);
+}
+
+.drawer-divider {
+  border: none;
+  border-top: 1px solid var(--fill-quinary);
+  margin: 8px 0;
+}
+
+.drawer-sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.drawer-source {
+  display: grid;
+  grid-template-columns: 1.2em 1fr auto;
+  gap: 6px;
+  align-items: baseline;
+  padding: 3px 0;
+}
+
+/* Per-outcome status icon, drawn from Zotero's own 16px icon set and tinted
+   via context-fill (the same mechanism as .tag-swatch). The visible outcome
+   text beside it names the state, so the icon itself is decorative. */
+.source-icon {
+  width: 1em;
+  height: 1em;
+  align-self: center;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  -moz-context-properties: fill, fill-opacity;
+}
+
+.source-icon-running {
+  background-image: url("chrome://zotero/skin/16/universal/refresh.svg");
+  fill: var(--fill-secondary);
+}
+
+.source-icon-empty {
+  background-image: url("chrome://zotero/skin/16/universal/minus-circle.svg");
+  fill: var(--fill-tertiary);
+}
+
+.source-icon-found {
+  background-image: url("chrome://zotero/skin/16/universal/tick.svg");
+  fill: var(--accent-green);
+}
+
+.source-icon-failed {
+  background-image: url("chrome://zotero/skin/16/universal/cross.svg");
+  fill: var(--accent-red);
+}
+
+.source-detail {
+  grid-column: 2 / 4;
+  color: var(--accent-red);
+  overflow-wrap: anywhere;
 }

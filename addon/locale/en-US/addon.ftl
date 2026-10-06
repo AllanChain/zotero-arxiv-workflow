@@ -18,6 +18,7 @@ update-window = Update arXiv Paper
 
 update-message =
   .download-pdf-error = No PDF available
+  .sources-failed = Some sources failed
 
 update-status =
   .pending = Pending
@@ -30,25 +31,30 @@ update-status =
   .download-error = Failed to download paper metadata
   .general-error = Update failed
 
-review-candidate =
-  .dblp = DBLP
-  .pubmed = PubMed
-  .crossref = Crossref
-
-review-prompt = Fuzzy match found.
-
-candidate-confirm-title = Confirm Fuzzy Match
-candidate-confirm-message = A fuzzy match was found for this preprint. Review the candidate below, then confirm to merge the published version into the preprint, or skip to keep the preprint as is.
-candidate-confirm-dialog =
-  .buttonlabelaccept = Confirm
-  .buttonlabelextra1 = Skip
-
 review-action =
-  .click-to-check = Click to check
+  .confirm = Confirm
+  .skip = Skip
   .view-candidate = View candidate page
 
 review-message =
   .skipped = Candidate skipped
+
+drawer-kicker = Details
+drawer-close = Close
+
+source-name =
+  .relatedDOI = Related DOI
+  .semanticScholar = Semantic Scholar
+  .dblp = DBLP
+  .pubMed = PubMed
+  .crossref = Crossref
+  .arXivPDF = arXiv PDF
+
+source-outcome =
+  .running = Checking…
+  .empty = No result
+  .found = Match found
+  .failed = Failed
 
 update-pdf-prompt = Download latest PDF
   .download = Downloading PDF...

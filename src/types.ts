@@ -58,9 +58,38 @@ export type UpdateStatus =
   | "download-error"
   | "general-error";
 
+/** Every source the update pipeline can query. */
+export const SOURCE_KEYS = [
+  "relatedDOI",
+  "semanticScholar",
+  "dblp",
+  "pubMed",
+  "crossref",
+  "arXivPDF",
+] as const;
+export type SourceKey = (typeof SOURCE_KEYS)[number];
+
+export const SOURCE_OUTCOMES = ["running", "empty", "found", "failed"] as const;
+export type SourceOutcome = (typeof SOURCE_OUTCOMES)[number];
+
+/**
+ * One source's state. A failure always carries its reason; other outcomes
+ * carry nothing more.
+ */
+export type SourceState =
+  | { outcome: Exclude<SourceOutcome, "failed"> }
+  | { outcome: "failed"; detail: string };
+
+/** One reported state change: the source plus its new state. */
+export type SourceCheck = SourceState & { key: SourceKey };
+
+/** Per-source state within a row's update run, keyed by source. */
+export type SourceProgress = Partial<Record<SourceKey, SourceState>>;
+
 export type UpdateTableData = {
   id: number;
   title: string;
   status: UpdateStatus;
   message?: string;
+  sources?: SourceProgress;
 };

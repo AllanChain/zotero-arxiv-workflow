@@ -3,9 +3,8 @@
 /* eslint-disable */
 // @ts-nocheck
 export type FluentMessageId =
-  | 'candidate-confirm-dialog'
-  | 'candidate-confirm-message'
-  | 'candidate-confirm-title'
+  | 'drawer-close'
+  | 'drawer-kicker'
   | 'menuitem-merge'
   | 'menuitem-prefer'
   | 'menuitem-update'
@@ -41,9 +40,9 @@ export type FluentMessageId =
   | 'pref-update-concurrency'
   | 'prefs-title'
   | 'review-action'
-  | 'review-candidate'
   | 'review-message'
-  | 'review-prompt'
+  | 'source-name'
+  | 'source-outcome'
   | 'update-message'
   | 'update-pdf-prompt'
   | 'update-status'

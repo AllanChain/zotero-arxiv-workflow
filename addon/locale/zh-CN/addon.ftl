@@ -18,6 +18,7 @@ update-window = arXiv 更新
 
 update-message =
   .download-pdf-error = PDF 不可用
+  .sources-failed = 部分来源查询失败
 
 update-status =
   .pending = 等待中
@@ -30,25 +31,30 @@ update-status =
   .download-error = 下载文章元数据失败
   .general-error = 更新失败
 
-review-candidate =
-  .dblp = DBLP
-  .pubmed = PubMed
-  .crossref = Crossref
-
-review-prompt = 发现模糊匹配。
-
-candidate-confirm-title = 确认模糊匹配
-candidate-confirm-message = 为此预印本找到了一个模糊匹配。请核对下方候选条目：确认将已发表版本合并到预印本，跳过则保留预印本不变。
-candidate-confirm-dialog =
-  .buttonlabelaccept = 确认
-  .buttonlabelextra1 = 跳过
-
 review-action =
-  .click-to-check = 点击查看
+  .confirm = 确认
+  .skip = 跳过
   .view-candidate = 查看候选论文页面
 
 review-message =
   .skipped = 已跳过候选
+
+drawer-kicker = 详情
+drawer-close = 关闭
+
+source-name =
+  .relatedDOI = 相关 DOI
+  .semanticScholar = Semantic Scholar
+  .dblp = DBLP
+  .pubMed = PubMed
+  .crossref = Crossref
+  .arXivPDF = arXiv PDF
+
+source-outcome =
+  .running = 查询中…
+  .empty = 未找到
+  .found = 找到匹配
+  .failed = 失败
 
 update-pdf-prompt = 下载最新 PDF
   .download = 正在下载 PDF
