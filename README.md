@@ -15,9 +15,9 @@
 This Zotero plugin addresses the pain when you store papers from arXiv and want to update your Zotero entry when they are published.
 
 > [!Warning]
-> This plugin is in alpha stage and only supports Zotero 8, 9, and 10!
+> This plugin only supports Zotero 8, 9, and 10.
 >
-> I strongly recommend you to check the results manually after operations.
+> Although data loss is rare, I strongly recommend you to check the results manually after operations.
 
 ## ✨ Features
 
