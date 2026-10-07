@@ -94,7 +94,7 @@ export class UpdateDialog {
     // Keep the open table and the drawer in sync with row changes.
     UpdateDialog.manager.onChange = () => {
       if (window.closed) return;
-      UpdateDialog.tableHelper?.treeInstance.invalidate();
+      UpdateDialog.tableHelper?.treeInstance?.invalidate();
       if (UpdateDialog.drawer?.isOpen()) UpdateDialog.drawer.render();
     };
 
@@ -117,7 +117,7 @@ export class UpdateDialog {
     );
     if (window !== undefined && !window.closed && tableHelper !== undefined) {
       // Simply update data if window is open and valid
-      tableHelper.treeInstance.invalidate();
+      tableHelper.treeInstance?.invalidate();
     } else {
       // Clear old data and reopen window otherwise
       UpdateDialog.manager.filterInactive();
