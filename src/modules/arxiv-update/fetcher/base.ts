@@ -1,5 +1,5 @@
 import PQueue from "p-queue";
-import { getPref } from "../../utils/prefs";
+import { getPref } from "../../../utils/prefs";
 
 // Limit concurrent requests per host to avoid being rate-limited.
 const hostQueues = new Map<string, PQueue>();
@@ -27,13 +27,16 @@ export function authHeaders(url: string): Record<string, string> {
   }
 }
 
+/** Options the request seam forwards to `Zotero.HTTP.request`. */
+export type RequestOptions = { timeout?: number; responseType?: string };
+
 // Bound requests so a slow request can't hang the update queue.
 // Zotero.HTTP (not bare `fetch`) routes through Zotero's proxy
 // rewriting, which campus users rely on, and shares the translator
 // framework's HTTP/proxy/cookie footing for follow-up requests.
 export function requestBounded(
   url: string,
-  options: { timeout?: number; responseType?: string } = {},
+  options: RequestOptions = {},
 ): Promise<XMLHttpRequest> {
   return hostQueue(new URL(url).hostname).add(
     () =>
@@ -47,14 +50,13 @@ export function requestBounded(
   );
 }
 
-async function fetchTextBounded(url: string): Promise<string> {
-  return (await requestBounded(url)).responseText!;
-}
-
 // An HTML page served at HTTP 200 (DBLP's anti-bot challenge, a captive
 // portal) would otherwise reach the user as a bare "SyntaxError: JSON.parse".
 // Trust the content type first, then a leading HTML tag.
-function looksLikeHTML(contentType: string | null, body: string): boolean {
+export function looksLikeHTML(
+  contentType: string | null,
+  body: string,
+): boolean {
   const type = contentType?.split(";")[0]?.trim().toLowerCase();
   if (type === "text/html" || type === "application/xhtml+xml") return true;
   return /^<(?:!doctype html|html|head|body)[\s>]/i.test(body);
@@ -103,8 +105,8 @@ export function parseJSONResponse<T>(
   }
 }
 
-async function fetchJSONBounded<T = any>(url: string): Promise<T> {
-  const xhr = await requestBounded(url);
+/** Parse a response body as JSON, naming `url` in any error. */
+function parseXHRJSON<T = any>(url: string, xhr: XMLHttpRequest): T {
   return parseJSONResponse<T>(
     url,
     xhr.status,
@@ -116,9 +118,17 @@ async function fetchJSONBounded<T = any>(url: string): Promise<T> {
 export interface Fetcher {
   fetchText(url: string): Promise<string>;
   fetchJSON<T = any>(url: string): Promise<T>;
+  /** Raw request for callers that need response options or the XHR itself
+   * (e.g. a document response for translator imports). */
+  request(url: string, options?: RequestOptions): Promise<XMLHttpRequest>;
 }
 
-export const defaultFetcher: Fetcher = {
-  fetchText: fetchTextBounded,
-  fetchJSON: fetchJSONBounded,
-};
+/** Build a `Fetcher` by deriving its parsed methods from `request`. */
+export function fetcherFromRequest(request: Fetcher["request"]): Fetcher {
+  return {
+    request,
+    fetchText: async (url: string) => (await request(url)).responseText!,
+    fetchJSON: async <T = any>(url: string) =>
+      parseXHRJSON<T>(url, await request(url)),
+  };
+}

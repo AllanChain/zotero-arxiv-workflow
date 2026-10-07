@@ -1,5 +1,8 @@
 import { assert } from "chai";
-import { authHeaders, parseJSONResponse } from "@/modules/arxiv-update/fetcher";
+import {
+  authHeaders,
+  parseJSONResponse,
+} from "@/modules/arxiv-update/fetcher/base";
 import { getPlugin, setPluginPref } from "@test/helpers";
 
 describe("fetcher", function () {

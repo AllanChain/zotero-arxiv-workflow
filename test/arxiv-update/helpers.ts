@@ -55,9 +55,10 @@ export function createFetcher(
   handlers: {
     fetchText?: (url: string) => string | Promise<string>;
     fetchJSON?: (url: string) => unknown | Promise<unknown>;
+    request?: (url: string) => XMLHttpRequest | Promise<XMLHttpRequest>;
   } = {},
 ) {
-  const calls: Array<{ type: "text" | "json"; url: string }> = [];
+  const calls: Array<{ type: "text" | "json" | "request"; url: string }> = [];
   const fetcher: Fetcher = {
     fetchText: async (url) => {
       calls.push({ type: "text", url });
@@ -66,6 +67,15 @@ export function createFetcher(
     fetchJSON: async <T = any>(url: string) => {
       calls.push({ type: "json", url });
       return (handlers.fetchJSON ? handlers.fetchJSON(url) : {}) as T;
+    },
+    // A raw request only happens when a test opts in with `request`; without
+    // one it means a missing `createItem` stub, so fail loudly.
+    request: async (url) => {
+      calls.push({ type: "request", url });
+      if (!handlers.request) {
+        throw new Error(`unexpected raw request in test: ${url}`);
+      }
+      return handlers.request(url);
     },
   };
   return { fetcher, calls };

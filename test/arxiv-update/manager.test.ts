@@ -1,6 +1,7 @@
 import { assert } from "chai";
+import PQueue from "p-queue";
 import type Addon from "@/addon";
-import type { UpdateManager } from "@/modules/arxiv-update/manager";
+import { UpdateManager } from "@/modules/arxiv-update/manager";
 import { UpdateDialog } from "@/modules/arxiv-update/update-dialog";
 import type { PaperIdentifier } from "@/types";
 import { getString } from "@/utils/locale";
@@ -205,6 +206,32 @@ describe("update-manager", function () {
     const merged = await getItem(item.id);
     assert.equal(merged.itemType, "journalArticle");
     assert.equal(merged.getField("url"), "https://arxiv.org/abs/1234.5678");
+  });
+
+  it("routes the URL import through the injected fetcher", async function () {
+    setPluginPref("downloadJournalPDF", false);
+    const item = await createPreprintItem();
+    // No `createItem` stub: exercise the real default import, which must reach
+    // the raw-request seam of the injected fetcher (and stop there).
+    const { fetcher, calls } = createFetcher({
+      fetchText: async () => "<html><strong>[v2]</strong></html>",
+      fetchJSON: async () => ({}),
+      request: async () => {
+        throw new Error("import request reached");
+      },
+    });
+    const queue = new PQueue({ concurrency: 1 });
+    const manager = new UpdateManager(queue, { fetcher });
+
+    manager.createUpdateTasks([item]);
+    await queue.onIdle();
+
+    assert.ok(
+      calls.some((call) => call.type === "request"),
+      "the import should request the paper URL",
+    );
+    assert.equal(manager.getRows()[0].status, "general-error");
+    assert.equal(manager.getRows()[0].message, "import request reached");
   });
 
   it("runs the whole update through the public arXivUpdate API", async function () {

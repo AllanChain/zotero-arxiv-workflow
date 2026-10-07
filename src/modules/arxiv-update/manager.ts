@@ -2,7 +2,7 @@ import PQueue from "p-queue";
 import { getString } from "../../utils/locale";
 import { getPref } from "../../utils/prefs";
 import { arXivMerge } from "../arxiv-merge";
-import { Fetcher, defaultFetcher, requestBounded } from "./fetcher";
+import { type Fetcher, defaultFetcher } from "./fetcher";
 import { PaperFinder } from "./paper-finder";
 import {
   FinderIterator,
@@ -19,6 +19,7 @@ type ReportProgress = (status: UpdateStatus, msg?: string) => void;
 async function createItemByZotero(
   paper: PaperIdentifier,
   collections: number[],
+  fetcher: Fetcher,
 ): Promise<Zotero.Item | false> {
   let translate;
   if (paper.doi) {
@@ -28,9 +29,9 @@ async function createItemByZotero(
     translate.setTranslator(translators);
   } else if (paper.url) {
     translate = new Zotero.Translate.Web();
-    // Imports can re-hit a host (e.g. the DBLP BibTeX view used
-    // for OpenReview records), so they share the per-host queue.
-    const xhr = await requestBounded(paper.url, {
+    // Imports can re-hit a host (e.g. the DBLP BibTeX view used for
+    // OpenReview records), so they share the per-host queue.
+    const xhr = await fetcher.request(paper.url, {
       timeout: 30000,
       responseType: "document",
     });
@@ -57,11 +58,11 @@ async function createItemByZotero(
 
 /**
  * Injectable seams for UpdateManager. Production uses the defaults (the
- * bounded production fetcher and the translator-based import); tests pass
- * stubs so the whole update pipeline runs without the network.
+ * production fetcher and the translator-based import); tests pass stubs so
+ * the whole update pipeline runs without the network.
  */
 export interface UpdateManagerOptions {
-  /** Network seam for the finder. Defaults to the bounded production fetcher. */
+  /** Network seam for the finder and the import. Defaults to production. */
   fetcher?: Fetcher;
   /**
    * Creates the journal item from a found identifier. Defaults to
@@ -70,6 +71,7 @@ export interface UpdateManagerOptions {
   createItem?: (
     paper: PaperIdentifier,
     collections: number[],
+    fetcher: Fetcher,
   ) => Promise<Zotero.Item | false>;
 }
 
@@ -322,7 +324,7 @@ export class UpdateManager {
       : pane?.getSelectedCollection
         ? [pane.getSelectedCollection(true)]
         : [];
-    const journalItem = await this.createItem(paper, collections);
+    const journalItem = await this.createItem(paper, collections, this.fetcher);
     if (!journalItem) return reportProgress("download-error");
     journalItem.saveTx();
 
