@@ -216,7 +216,23 @@ export class arXivMerge {
     publishedItem.setField("extra", tempExtra);
     publishedItem.saveTx();
     preprintItem.fromJSON(journalJSON);
-    preprintItem.saveTx();
+    /* Persist the new item type before any child attachment is saved or
+     * trashed. Saving or trashing a child reloads the master item's primary
+     * data with `reload = true`, and Zotero then calls `setType()` with the
+     * type read from the database. If the in-memory type (already the journal
+     * type) differs from the not-yet-persisted database type, `setType()`
+     * throws "Cannot change type in loadIn mode".
+     *
+     * Saving the preprint here would also queue Zotero's automatic attachment
+     * rename (`autoRenameFiles.onMetadataChange`), which runs asynchronously;
+     * if it lands while `Zotero.Items.merge` is hashing the attachments,
+     * `md5Async` fails with NS_ERROR_FILE_NOT_FOUND. `skipRenameFile`
+     * suppresses that observer for this save, deferring the rename to the
+     * merge's own final save, after hashing.
+     */
+    await preprintItem.saveTx({
+      notifierData: { skipRenameFile: true },
+    });
     /* Create a web link attachment for arXiv URL.
      * Some preprint items already has a snapshot attachment containing the URL.
      * In that case we will skip the creation of the link attachment.
