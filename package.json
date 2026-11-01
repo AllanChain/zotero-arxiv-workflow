@@ -40,22 +40,22 @@
     "zotero-plugin-toolkit": "^5.2.0"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.2.3",
-    "@commitlint/config-conventional": "^21.2.3",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "@eslint/js": "^10.0.0",
     "@types/chai": "^5.2.3",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^24.19.0",
+    "@types/node": "^24.19.2",
     "@zotero-plugin/eslint-config": "^0.6.10",
-    "chai": "^6.2.2",
-    "eslint": "^10.11.0",
+    "chai": "^6.3.0",
+    "eslint": "^10.14.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
-    "mocha": "^12.0.2",
-    "prettier": "^3.9.9",
+    "mocha": "^12.0.3",
+    "prettier": "^3.9.10",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.71.0",
-    "zotero-plugin-scaffold": "^0.9.2",
+    "typescript-eslint": "^8.72.1",
+    "zotero-plugin-scaffold": "^0.9.3",
     "zotero-types": "^4.1.3"
   },
   "prettier": {
@@ -73,7 +73,7 @@
       }
     ]
   },
-  "packageManager": "npm@12.1.0+sha512.17286eeb6a4dc7bd180acff9f9d1262504c556648ac2fa39080d2abc19060d1a686f8d8c27a1b6450dad77178a3389d89c8643aa4600c4482ab687a39fd406b5",
+  "packageManager": "npm@12.2.1+sha512.6ca0a6151553fc107e60f1186d9c10d57508dcde6de31292a54d4cc4e8e8ef3de25b3281274657442d7115d10df930bb3794ddcb0681cdfd9d317189abf7b63d",
   "allowScripts": {
     "@swc/core@1.15.43": true,
     "es5-ext@0.10.64": true,
