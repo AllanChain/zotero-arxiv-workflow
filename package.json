@@ -37,7 +37,7 @@
   "dependencies": {
     "diff": "^9.0.0",
     "p-queue": "^8.1.1",
-    "zotero-plugin-toolkit": "^5.2.0"
+    "zotero-plugin-toolkit": "^6.0.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
